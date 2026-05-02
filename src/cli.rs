@@ -64,6 +64,9 @@ pub enum Command {
     /// Print a friendly step-by-step guide for first-time users
     HelpMe,
 
+    /// Render a local HTML dashboard of registry, session, and audit log
+    Dashboard(DashboardArgs),
+
     /// Print version
     Version,
 }
@@ -98,6 +101,16 @@ pub struct ListArgs {
     /// JSON output
     #[arg(long)]
     pub json: bool,
+
+    /// Filter mappings by case-insensitive substring match against placeholder OR vault id.
+    /// Useful for multi-account workflows: `lockshell list --grep supabase` shows
+    /// every Supabase-related placeholder regardless of suffix convention.
+    #[arg(long, value_name = "PATTERN")]
+    pub grep: Option<String>,
+
+    /// Print placeholder names only, one per line. Pipes cleanly into other tools.
+    #[arg(long)]
+    pub names_only: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -152,4 +165,19 @@ pub struct DoctorArgs {
     /// Attempt to fix issues automatically where safe
     #[arg(long)]
     pub fix: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct DashboardArgs {
+    /// Path to write the dashboard HTML. Defaults to a tempfile that auto-opens in your browser.
+    #[arg(long, value_name = "PATH")]
+    pub out: Option<String>,
+
+    /// Do not auto-open the file in your browser.
+    #[arg(long)]
+    pub no_open: bool,
+
+    /// Number of recent audit entries to render. Default 20.
+    #[arg(short = 'n', long, default_value = "20")]
+    pub lines: usize,
 }
