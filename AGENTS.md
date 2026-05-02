@@ -179,17 +179,28 @@ If all five are yes, you are using lockshell correctly.
 <claude-mem-context>
 # Memory Context
 
-# [lockshell] recent context, 2026-05-02 2:02pm PDT
+# [lockshell] recent context, 2026-05-02 2:16pm PDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 2 obs (741t read) | 8,318t work | 91% savings
+Stats: 13 obs (5,062t read) | 142,837t work | 96% savings
 
 ### May 2, 2026
 3877 2:01p 🔵 Lockshell agent contract and workflow documented
 3878 " 🔵 Lockshell skill defines agent trigger patterns and hard rules
+3879 2:02p 🔵 Lockshell doctor diagnosed system state and missing session
+3880 " 🔵 Agent-password daemon fails to start with ready check timeout
+3881 " 🔵 Lockshell run fails with audit log permission error
+3883 " 🔵 lockshell agent-password session creation fails silently
+3882 2:03p 🔵 Audit log implementation traced to config_dir plus audit.log
+3884 " 🔵 lockshell run fails with permission error on audit.log despite correct Unix permissions
+3885 2:04p 🔵 LOCKSHELL_CONFIG_DIR workaround bypasses audit.log permission issue but exposes agent-password daemon failure
+3887 " 🔵 agent-password daemon startup timeout mechanism reveals 5-second connection window
+3888 2:05p 🔵 agent-password daemon fails to bind Unix socket due to macOS Operation not permitted error
+3890 2:06p 🔵 macOS blocks Unix socket bind operations across all directories for agent-password binary
+3894 " ✅ lockshell agent-readiness audit report completed documenting macOS security failures
 
-Access 8k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 143k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

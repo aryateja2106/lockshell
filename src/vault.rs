@@ -97,7 +97,12 @@ impl AgentPasswordVault {
             if stderr.contains("no shared session") {
                 return Err(VaultError::NoSession.into());
             }
-            return Err(VaultError::Other(stderr.trim().into()).into());
+            // Defense-in-depth: redact the upstream stderr before surfacing.
+            // If agent-password ever leaks a value to its stderr, we don't
+            // want to propagate it through our error chain.
+            let patterns = crate::redact::load_patterns().unwrap_or_default();
+            let redacted = crate::redact::redact(stderr.trim(), &patterns);
+            return Err(VaultError::Other(redacted).into());
         }
         let stdout = String::from_utf8_lossy(&out.stdout);
         let v: Value = serde_json::from_str(&stdout)
@@ -116,7 +121,12 @@ impl AgentPasswordVault {
             .output()
             .context("running agent-password secrets request")?;
         if !out.status.success() {
-            return Err(VaultError::Other(String::from_utf8_lossy(&out.stderr).trim().into()).into());
+            let patterns = crate::redact::load_patterns().unwrap_or_default();
+            let redacted = crate::redact::redact(
+                String::from_utf8_lossy(&out.stderr).trim(),
+                &patterns,
+            );
+            return Err(VaultError::Other(redacted).into());
         }
         let stdout = String::from_utf8_lossy(&out.stdout);
         for line in stdout.lines() {

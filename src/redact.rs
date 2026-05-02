@@ -4,6 +4,7 @@ use crate::registry;
 use anyhow::Result;
 use regex::Regex;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 pub fn redactor_path() -> PathBuf {
@@ -31,8 +32,10 @@ pub fn ensure_default() -> Result<()> {
     if !path.exists() {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
+            let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
         }
         fs::write(&path, DEFAULT_PATTERNS)?;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     }
     Ok(())
 }

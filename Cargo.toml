@@ -1,6 +1,6 @@
 [package]
 name = "lockshell"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 authors = ["Arya Teja Rudraraju <aryayt55@gmail.com>"]
 license = "Apache-2.0"
@@ -27,6 +27,9 @@ thiserror = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 which = "6.0"
 nu-ansi-term = "0.50"
+# zero out secret values in process memory once they're no longer needed.
+# best-effort against forensic memory dumps; not a defense against active root.
+zeroize = { version = "1.8", features = ["derive"] }
 
 [dev-dependencies]
 assert_cmd = "2.0"

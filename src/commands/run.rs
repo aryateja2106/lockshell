@@ -10,6 +10,7 @@ use anyhow::Result;
 use regex::Regex;
 use std::collections::BTreeSet;
 use std::process::{Command, Stdio};
+use zeroize::Zeroizing;
 
 pub fn run(args: RunArgs) -> Result<()> {
     let template = args.command.join(" ");
@@ -38,8 +39,11 @@ pub fn run(args: RunArgs) -> Result<()> {
         ui::hint("For sandboxed agents, set LOCKSHELL_CONFIG_DIR to a writable directory.");
     }
 
-    // Resolve each placeholder.
-    let mut resolved: Vec<(String, String)> = Vec::new();
+    // Resolve each placeholder. Wrap the value in `Zeroizing` so the
+    // string buffer is overwritten with zeros when it goes out of scope.
+    // This is best-effort: `Command::env` clones the bytes internally and
+    // we cannot zero those, but we can at least clean up our own copies.
+    let mut resolved: Vec<(String, Zeroizing<String>)> = Vec::new();
     for ph in &placeholders {
         let mapping = registry::lookup(ph)?
             .ok_or_else(|| anyhow::anyhow!(
@@ -47,7 +51,7 @@ pub fn run(args: RunArgs) -> Result<()> {
                 ph, ph
             ))?;
         match AgentPasswordVault::get_field(&mapping.vault_id, &mapping.field) {
-            Ok(val) => resolved.push((ph.clone(), val)),
+            Ok(val) => resolved.push((ph.clone(), Zeroizing::new(val))),
             Err(e) => {
                 if let Some(VaultError::NotApproved(_)) = e.downcast_ref::<VaultError>() {
                     ui::err(&format!(
@@ -80,18 +84,26 @@ pub fn run(args: RunArgs) -> Result<()> {
         }
     }
 
-    // Substitute {{NAME}} → $NAME and inject values via env.
+    // Substitute {{NAME}} → "$NAME" and inject values via env.
+    //
+    // CRITICAL: we always emit DOUBLE-QUOTED env references. Without the
+    // quotes, if a template like `tool --arg {{KEY}}` is paired with a
+    // secret value that contains whitespace or shell metacharacters,
+    // bash will word-split or expand the value at runtime, breaking out
+    // of the intended argument boundary. Double quotes guarantee the
+    // value is treated as exactly one argument.
     let mut resolved_cmd = template.clone();
     for (name, _) in &resolved {
         let placeholder = format!("{{{{{}}}}}", name);
-        let replacement = format!("${}", name);
+        let replacement = format!("\"${}\"", name);
         resolved_cmd = resolved_cmd.replace(&placeholder, &replacement);
     }
 
     let mut cmd = Command::new("/bin/bash");
     cmd.arg("-c").arg(&resolved_cmd);
     for (name, value) in &resolved {
-        cmd.env(name, value);
+        // Pass via env so the secret never appears on argv.
+        cmd.env(name, value.as_str());
     }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
@@ -99,14 +111,23 @@ pub fn run(args: RunArgs) -> Result<()> {
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
-    let patterns = if args.no_redact {
+    // --no-redact requires an explicit env var to actually take effect.
+    // The flag alone is not enough; agents that defaulted to passing
+    // --no-redact would otherwise be one config bug away from leaking
+    // values. Both must be present to disable redaction.
+    let no_redact_allowed =
+        args.no_redact && std::env::var("LOCKSHELL_ALLOW_NO_REDACT").as_deref() == Ok("1");
+    if args.no_redact && !no_redact_allowed {
+        ui::warn("--no-redact requires LOCKSHELL_ALLOW_NO_REDACT=1; ignoring flag and redacting normally.");
+    }
+    let patterns = if no_redact_allowed {
         vec![]
     } else {
         redact::load_patterns()?
     };
 
-    let stdout_clean = if args.no_redact { stdout } else { redact::redact(&stdout, &patterns) };
-    let stderr_clean = if args.no_redact { stderr } else { redact::redact(&stderr, &patterns) };
+    let stdout_clean = if no_redact_allowed { stdout } else { redact::redact(&stdout, &patterns) };
+    let stderr_clean = if no_redact_allowed { stderr } else { redact::redact(&stderr, &patterns) };
 
     print!("{}", stdout_clean);
     if !stderr_clean.is_empty() {

@@ -4,7 +4,14 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
+
+// Sensible upper bounds for registry input fields, to prevent a malicious
+// LLM or template from filling the registry with multi-megabyte garbage.
+pub const MAX_ENV_NAME_LEN: usize = 256;
+pub const MAX_VAULT_ID_LEN: usize = 256;
+pub const MAX_FIELD_LEN: usize = 64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mapping {
@@ -30,6 +37,9 @@ fn ensure_dir() -> Result<()> {
     if !dir.exists() {
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     }
+    // Owner-only access; we explicitly set this even if the dir already
+    // existed with looser permissions from an earlier version.
+    let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
     Ok(())
 }
 
@@ -66,15 +76,27 @@ pub fn save(entries: &[Mapping]) -> Result<()> {
         .write(true)
         .create(true)
         .truncate(true)
+        .mode(0o600)
         .open(&path)
         .with_context(|| format!("opening {}", path.display()))?;
     for m in entries {
         writeln!(f, "{}\t{}\t{}", m.env_name, m.vault_id, m.field)?;
     }
+    // Re-assert permissions in case the file already existed with looser modes.
+    let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
     Ok(())
 }
 
 pub fn upsert(env_name: &str, vault_id: &str, field: &str) -> Result<()> {
+    if env_name.len() > MAX_ENV_NAME_LEN {
+        anyhow::bail!("env_name too long ({} chars; max {})", env_name.len(), MAX_ENV_NAME_LEN);
+    }
+    if vault_id.len() > MAX_VAULT_ID_LEN {
+        anyhow::bail!("vault_id too long ({} chars; max {})", vault_id.len(), MAX_VAULT_ID_LEN);
+    }
+    if field.len() > MAX_FIELD_LEN {
+        anyhow::bail!("field too long ({} chars; max {})", field.len(), MAX_FIELD_LEN);
+    }
     let mut entries = load()?;
     entries.retain(|m| m.env_name != env_name);
     entries.push(Mapping {
