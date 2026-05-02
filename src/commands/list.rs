@@ -18,7 +18,7 @@ pub fn run(args: ListArgs) -> Result<()> {
         println!("    lockshell register LINEAR_API_KEY linear-api password");
         return Ok(());
     }
-    println!("{:<30} {:<30} {}", "PLACEHOLDER", "VAULT_ID", "FIELD");
+    println!("{:<30} {:<30} FIELD", "PLACEHOLDER", "VAULT_ID");
     println!("{}", "-".repeat(76));
     for m in entries {
         println!("{:<30} {:<30} {}", m.env_name, m.vault_id, m.field);

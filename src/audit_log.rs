@@ -33,10 +33,8 @@ pub struct Entry {
 pub fn append(reason: &str, template: &str, secrets: &[String]) -> Result<bool> {
     let path = audit_path();
     if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            if std::fs::create_dir_all(parent).is_err() {
-                return Ok(false);
-            }
+        if !parent.exists() && std::fs::create_dir_all(parent).is_err() {
+            return Ok(false);
         }
     }
     let f = OpenOptions::new()
