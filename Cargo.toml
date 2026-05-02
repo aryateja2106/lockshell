@@ -1,0 +1,40 @@
+[package]
+name = "lockshell"
+version = "0.1.0"
+edition = "2021"
+authors = ["Arya Teja Rudraraju <aryayt55@gmail.com>"]
+license = "Apache-2.0"
+description = "AI-safe secret broker. Cloud LLMs decide; the local broker resolves and executes. Secrets never leave the machine."
+homepage = "https://github.com/aryateja2106/lockshell"
+repository = "https://github.com/aryateja2106/lockshell"
+documentation = "https://github.com/aryateja2106/lockshell#readme"
+readme = "README.md"
+keywords = ["secrets", "agents", "ai", "cli", "security"]
+categories = ["command-line-utilities", "authentication"]
+rust-version = "1.74"
+
+[[bin]]
+name = "lockshell"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "color", "wrap_help"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.10"
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+which = "6.0"
+nu-ansi-term = "0.50"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
