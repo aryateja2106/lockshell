@@ -9,7 +9,8 @@ use serde_json::json;
 
 pub fn run(args: StatusArgs) -> Result<()> {
     let mappings = registry::load().unwrap_or_default();
-    let session = AgentPasswordVault::session_status().ok();
+    let session_result = AgentPasswordVault::session_status();
+    let session = session_result.as_ref().ok().cloned();
 
     if args.json {
         let s = json!({
@@ -48,7 +49,11 @@ pub fn run(args: StatusArgs) -> Result<()> {
             ui::warn("session: not active. Run: agent-password session create");
         }
         None => {
-            ui::warn("session: agent-password not installed or vault not initialized");
+            // Surface the actual error rather than a generic message.
+            let err = session_result.err()
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "unknown".into());
+            ui::err(&format!("session: {}", err));
         }
     }
     Ok(())

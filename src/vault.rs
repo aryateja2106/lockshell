@@ -41,13 +41,27 @@ impl AgentPasswordVault {
             .context("running agent-password session status")?;
         let text = String::from_utf8_lossy(&out.stdout).to_string();
         let stderr = String::from_utf8_lossy(&out.stderr);
+        let combined = format!("{}\n{}", text, stderr);
 
-        if stderr.contains("no shared session") || text.contains("no shared session") {
+        // Detect daemon-unavailable failures distinctly from "no session".
+        if combined.contains("internal daemon did not become ready")
+            || combined.contains("failed to bind")
+        {
+            return Err(VaultError::Other(
+                "agent-password daemon is not running and could not be started \
+                 (likely sandbox restriction or session was closed). Run \
+                 `agent-password session create` from an unsandboxed shell.".into()
+            )
+            .into());
+        }
+
+        if combined.contains("no shared session") {
             return Ok(SessionStatus { exists: false, unlocked: false, approved: vec![], pending_requests: 0 });
         }
 
-        // Parse the human-readable output.
-        let mut status = SessionStatus { exists: true, unlocked: false, approved: vec![], pending_requests: 0 };
+        // Parse the human-readable output. Default to exists=false; only flip to true
+        // when we see explicit `exists: true` output.
+        let mut status = SessionStatus { exists: false, unlocked: false, approved: vec![], pending_requests: 0 };
         for line in text.lines() {
             let line = line.trim();
             if let Some(rest) = line.strip_prefix("exists:") {

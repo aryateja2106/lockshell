@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::registry;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::Utc;
 use serde::Serialize;
 use std::fs::OpenOptions;
@@ -20,28 +20,46 @@ pub struct Entry {
     pub secrets: Vec<String>,
 }
 
-pub fn append(reason: &str, template: &str, secrets: &[String]) -> Result<()> {
+/// Append an audit entry. Returns `Ok(true)` on success, `Ok(false)` if the audit
+/// path could not be written (e.g. sandboxed agent without write access). The caller
+/// should print a warning on `Ok(false)` but MUST NOT fail the broker call —
+/// auditing is best-effort, not a security gate.
+pub fn append(reason: &str, template: &str, secrets: &[String]) -> Result<bool> {
     let path = audit_path();
-    let mut f = OpenOptions::new()
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            if std::fs::create_dir_all(parent).is_err() {
+                return Ok(false);
+            }
+        }
+    }
+    let f = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&path)
-        .with_context(|| format!("opening {}", path.display()))?;
+        .open(&path);
+    let mut f = match f {
+        Ok(f) => f,
+        Err(_) => return Ok(false),
+    };
     let entry = Entry {
         timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
         reason: reason.into(),
         template: template.into(),
         secrets: secrets.to_vec(),
     };
-    writeln!(
+    if writeln!(
         f,
         "{}\t{}\t{}\t{}",
         entry.timestamp,
         entry.reason,
         entry.template,
         entry.secrets.join(",")
-    )?;
-    Ok(())
+    )
+    .is_err()
+    {
+        return Ok(false);
+    }
+    Ok(true)
 }
 
 pub fn tail(n: usize) -> Result<Vec<Entry>> {

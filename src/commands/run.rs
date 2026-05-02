@@ -22,11 +22,21 @@ pub fn run(args: RunArgs) -> Result<()> {
         .collect();
 
     // Audit BEFORE we do anything. Log the template + reason, never values.
-    audit_log::append(
+    // Audit is best-effort — sandboxed agents may not have write access to
+    // ~/.config/lockshell/audit.log. We warn and continue rather than blocking.
+    let audit_ok = audit_log::append(
         &args.reason,
         &template,
         &placeholders.iter().cloned().collect::<Vec<_>>(),
-    )?;
+    )
+    .unwrap_or(false);
+    if !audit_ok {
+        ui::warn(&format!(
+            "audit log not writable at {} — continuing (broker call still works)",
+            audit_log::audit_path().display()
+        ));
+        ui::hint("For sandboxed agents, set LOCKSHELL_CONFIG_DIR to a writable directory.");
+    }
 
     // Resolve each placeholder.
     let mut resolved: Vec<(String, String)> = Vec::new();
@@ -54,6 +64,16 @@ pub fn run(args: RunArgs) -> Result<()> {
                     ui::err("no active vault session.");
                     ui::hint("agent-password session create");
                     std::process::exit(3);
+                }
+                if let Some(VaultError::Other(msg)) = e.downcast_ref::<VaultError>() {
+                    if msg.contains("internal daemon did not become ready") {
+                        ui::err("agent-password daemon is not running and could not be started.");
+                        ui::hint("This usually means: (a) you closed the session and the user must run");
+                        ui::hint("   `agent-password session create` from their unsandboxed shell, OR");
+                        ui::hint("(b) the sandbox blocks Unix socket creation at ~/.agent-password/daemon.sock.");
+                        ui::hint("Sandboxed agents cannot start the daemon themselves; ask the user.");
+                        std::process::exit(4);
+                    }
                 }
                 return Err(e);
             }

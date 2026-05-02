@@ -58,11 +58,35 @@ lockshell list
 lockshell status
 ```
 
-`doctor` will print specific commands for any missing pieces. Run those exactly as printed. Most common gaps:
+`doctor` exits non-zero on actionable problems. Read the output and run the printed commands.
 
-- `agent-password vault init` — only on a brand new install (the user does this once with Touch ID; you cannot do it for them)
-- `agent-password session create` — once per shell session
-- `agent-password secrets request <id> --requester <you> --reason "..."` then `agent-password requests approve <N> all` — once per session per secret
+Exit codes:
+- 0 — ready to broker
+- 1 — blocker present (`lockshell run` will fail). Fix before attempting.
+- 2 — non-blocking issue (e.g. audit log not writable in your sandbox)
+
+Most common gaps:
+
+- `agent-password vault init` — brand-new install only. The user does this once with Touch ID. You cannot.
+- `agent-password session create` — once per shell session, by the user from an unsandboxed shell. Sandboxed agents cannot bind the daemon socket and will see "internal daemon did not become ready".
+- `agent-password secrets request <id> --requester <you> --reason "..."` then `agent-password requests approve <N> all` — once per session per secret.
+
+## Sandboxed agents (Codex `workspace-write`, similar)
+
+If your sandbox restricts writes to `~/.config/`, lockshell's audit log location may not be writable. Two options:
+
+- **Set `LOCKSHELL_CONFIG_DIR`** to a directory you can write (e.g. `$TMPDIR/lockshell`). Copy the existing registry over once:
+
+  ```bash
+  export LOCKSHELL_CONFIG_DIR="${TMPDIR%/}/lockshell"
+  mkdir -p "$LOCKSHELL_CONFIG_DIR"
+  cp -n ~/.config/lockshell/registry.tsv "$LOCKSHELL_CONFIG_DIR/" 2>/dev/null || true
+  cp -n ~/.config/lockshell/redactors.txt "$LOCKSHELL_CONFIG_DIR/" 2>/dev/null || true
+  ```
+
+- **Or accept best-effort auditing.** v0.1 lockshell warns when the audit log can't be written but still runs the command. The cloud-leak prevention does not depend on the audit log; it depends on env-only secret injection.
+
+If your sandbox blocks Unix socket creation under `~/.agent-password/`, you cannot start the daemon. Ask the user to run `agent-password session create` in their normal shell. The daemon then becomes reachable to your sandbox via the existing socket file (read-only access is sufficient for most agent operations).
 
 ## When `lockshell run` fails with "not approved"
 
@@ -150,3 +174,22 @@ If all five are yes, you are using lockshell correctly.
 - `docs/THREAT_MODEL.md` for what lockshell defends against
 - `docs/ARCHITECTURE.md` for the v0.1 → v0.3 plan
 - `examples/linear-graphql.md` for a worked example
+
+
+<claude-mem-context>
+# Memory Context
+
+# [lockshell] recent context, 2026-05-02 2:02pm PDT
+
+Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
+Format: ID TIME TYPE TITLE
+Fetch details: get_observations([IDs]) | Search: mem-search skill
+
+Stats: 2 obs (741t read) | 8,318t work | 91% savings
+
+### May 2, 2026
+3877 2:01p 🔵 Lockshell agent contract and workflow documented
+3878 " 🔵 Lockshell skill defines agent trigger patterns and hard rules
+
+Access 8k tokens of past work via get_observations([IDs]) or mem-search skill.
+</claude-mem-context>
