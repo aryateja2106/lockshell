@@ -44,13 +44,19 @@ See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the full plan.
 
 ## Install
 
-### Prerequisites
+### One-line install (recommended, macOS only)
 
-- Rust 1.74+
-- macOS (Linux support coming in v1.0)
-- [`agent-password`](https://github.com/tartavull/agent-password) installed and on `PATH`
+```bash
+curl -fsSL https://raw.githubusercontent.com/aryateja2106/lockshell/main/install.sh | bash
+```
+
+This script detects your CPU architecture, downloads the matching pre-built binary from GitHub Releases, verifies the SHA-256 checksum, and installs to `~/.local/bin`. It does not modify your shell rc files; it does not install Rust or any package manager; it does not send data anywhere except GitHub.
+
+Want to read it first? Of course you do. [`install.sh`](install.sh).
 
 ### Build from source
+
+If you have Rust 1.74+:
 
 ```bash
 git clone https://github.com/aryateja2106/lockshell ~/Projects/lockshell
@@ -58,12 +64,17 @@ cd ~/Projects/lockshell
 cargo install --path .
 ```
 
-That puts `lockshell` in `~/.cargo/bin/`. Make sure that's on `PATH`.
+### Prerequisites
+
+- macOS (Linux support planned for v0.5; see roadmap)
+- [`agent-password`](https://github.com/tartavull/agent-password) installed and on `PATH` (the install script will tell you the exact command if it is missing)
 
 ### One-time setup
 
 ```bash
+lockshell help-me   # beginner-friendly tour, written for first-time users
 lockshell setup     # walks you through vault init + first secret
+lockshell doctor    # diagnoses anything missing and prints exact fix commands
 ```
 
 ## Quickstart
@@ -105,6 +116,7 @@ lockshell run --reason "list my issues" -- \
 | `lockshell audit [-n N] [--json]` | Show audit log entries (templates and reasons, never values) |
 | `lockshell status [--json]` | Show daemon, vault, and session state |
 | `lockshell doctor [--fix]` | Diagnose setup issues |
+| `lockshell help-me` | Friendly step-by-step guide for first-time users |
 | `lockshell version` | Print version |
 
 Each command supports `--help` with examples.

@@ -2,6 +2,7 @@
 
 pub mod audit;
 pub mod doctor;
+pub mod help_me;
 pub mod list;
 pub mod register;
 pub mod request;

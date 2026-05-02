@@ -27,6 +27,7 @@ fn main() -> Result<()> {
         cli::Command::Status(c) => commands::status::run(c),
         cli::Command::Doctor(c) => commands::doctor::run(c),
         cli::Command::Setup(c) => commands::setup::run(c),
+        cli::Command::HelpMe => commands::help_me::run(),
         cli::Command::Version => {
             println!("lockshell {} ({})", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_DESCRIPTION"));
             Ok(())

@@ -61,6 +61,9 @@ pub enum Command {
     /// Diagnose setup issues with helpful fix suggestions
     Doctor(DoctorArgs),
 
+    /// Print a friendly step-by-step guide for first-time users
+    HelpMe,
+
     /// Print version
     Version,
 }
