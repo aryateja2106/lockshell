@@ -5,6 +5,9 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.74+-orange.svg)](https://www.rust-lang.org)
 [![status: alpha](https://img.shields.io/badge/status-alpha-yellow.svg)](#stability)
+[![release](https://img.shields.io/github/v/release/aryateja2106/lockshell?display_name=tag&sort=semver)](https://github.com/aryateja2106/lockshell/releases/latest)
+
+![lockshell demo](demo/install-and-broker.gif)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -103,6 +106,46 @@ lockshell run --reason "list my issues" -- \
     https://api.linear.app/graphql'
 ```
 
+## Multiple accounts (e.g. several Supabase projects)
+
+Use a suffix convention. The placeholder name picks the account.
+
+```bash
+# Vault: per-context vault ids
+pbpaste | agent-password login add supabase-cloudagi --username you \
+  --url https://supabase.com --password-stdin --tag agent
+pbpaste | agent-password login add supabase-aryateja --username you \
+  --url https://supabase.com --password-stdin --tag agent
+
+# Registry: per-context placeholder names
+lockshell register SUPABASE_TOKEN_CLOUDAGI supabase-cloudagi password
+lockshell register SUPABASE_TOKEN_ARYATEJA supabase-aryateja password
+
+# Discoverability: --grep finds them all regardless of suffix
+lockshell list --grep supabase
+# PLACEHOLDER                    VAULT_ID                       FIELD
+# ----------------------------------------------------------------------------
+# SUPABASE_TOKEN_CLOUDAGI        supabase-cloudagi              password
+# SUPABASE_TOKEN_ARYATEJA        supabase-aryateja              password
+```
+
+Agents pick the account explicitly by which placeholder they put in the command. No global "current project" state, no implicit defaults.
+
+```bash
+lockshell run --reason "push CloudAGI migrations" -- \
+  'SUPABASE_ACCESS_TOKEN={{SUPABASE_TOKEN_CLOUDAGI}} supabase db push --linked'
+```
+
+Full provider recipes (Linear, Vercel, Supabase, GitHub, OpenAI, Anthropic, Cloudflare): [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
+
+## Local dashboard
+
+```bash
+lockshell dashboard
+```
+
+Renders a self-contained HTML page (registry, recent audit, session state) and opens it in your default browser. No daemon, no server, no extra deps. Use `--no-open --out path.html` for headless rendering.
+
 ## Commands
 
 | Command | Description |
@@ -119,7 +162,7 @@ lockshell run --reason "list my issues" -- \
 | `lockshell help-me` | Friendly step-by-step guide for first-time users |
 | `lockshell version` | Print version |
 
-Each command supports `--help` with examples.
+Each command supports `--help` with examples. For an end-to-end beginner walkthrough, run `lockshell help-me`.
 
 ## Threat model
 
