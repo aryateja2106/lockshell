@@ -140,6 +140,68 @@ pub fn append_ssh(
     Ok(true)
 }
 
+/// Append an `op=ssh-run` audit entry for agent-driven remote command
+/// execution. Same best-effort semantics as the others.
+///
+/// Row format (tab-separated):
+///   timestamp \t reason \t op=ssh-run \t alias \t host \t principal \t template \t secret_csv
+///
+/// `template` carries the unsubstituted remote command (placeholder names
+/// only). `secret_csv` is a comma-joined list of placeholder names that
+/// were resolved against the vault.
+pub fn append_ssh_run(
+    reason: &str,
+    alias: &str,
+    host: &str,
+    principal: &str,
+    template: &str,
+    secrets: &[String],
+) -> Result<bool> {
+    let path = audit_path();
+    if let Some(parent) = path.parent() {
+        if !parent.exists() && std::fs::create_dir_all(parent).is_err() {
+            return Ok(false);
+        }
+    }
+    let f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(&path);
+    let mut f = match f {
+        Ok(f) => f,
+        Err(_) => return Ok(false),
+    };
+    let _ = fs::set_permissions(&path, Permissions::from_mode(0o600));
+
+    fn truncate(s: &str, max: usize) -> String {
+        if s.len() > max {
+            format!("{}...[truncated]", &s[..max])
+        } else {
+            s.to_string()
+        }
+    }
+
+    const MAX_FIELD: usize = 256;
+    let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    if writeln!(
+        f,
+        "{}\t{}\top=ssh-run\t{}\t{}\t{}\t{}\t{}",
+        timestamp,
+        truncate(reason, MAX_REASON_LEN),
+        truncate(alias, MAX_FIELD),
+        truncate(host, MAX_FIELD),
+        truncate(principal, MAX_FIELD),
+        truncate(template, MAX_TEMPLATE_LEN),
+        secrets.join(","),
+    )
+    .is_err()
+    {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 pub fn tail(n: usize) -> Result<Vec<Entry>> {
     let path = audit_path();
     if !path.exists() {

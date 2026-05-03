@@ -13,4 +13,5 @@ pub mod setup;
 pub mod ssh;
 pub mod ssh_host;
 pub mod ssh_init;
+pub mod ssh_run;
 pub mod status;

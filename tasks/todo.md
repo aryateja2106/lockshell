@@ -204,11 +204,11 @@ The first user-visible SSH demo.
 
 ## Phase 5 — Agent flow (`lockshell ssh-run`)
 
-- [ ] **5.1** `lockshell ssh-run` subcommand
+- [x] **5.1** `lockshell ssh-run` subcommand
   - Acceptance: Same shape as `lockshell run` but for SSH. `--reason` required. Resolves `{{PLACEHOLDER}}`. Mints cert. Spawns `ssh` non-interactively. Redacts output. Returns subprocess exit code.
   - Files: `crates/lockshell/src/commands/ssh_run.rs`, `crates/lockshell/src/cli.rs`.
 
-- [ ] **5.2** Audit row format extended
+- [x] **5.2** Audit row format extended
   - Acceptance: SSH-run rows include `op=ssh-run`, `alias`, `cert_ttl`, `redacted_byte_count`.
   - Files: `crates/lockshell/src/audit_log.rs`.
 

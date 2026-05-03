@@ -94,6 +94,16 @@ pub enum Command {
     /// with `TrustedUserCAKeys` to enable cert-based auth.
     Ca(CaArgs),
 
+    /// Run a command on a remote host, resolving {{PLACEHOLDER}} secrets
+    /// from the vault. Mirrors `lockshell run` for SSH targets.
+    ///
+    /// Secrets never appear on argv — the substituted command is piped to
+    /// `bash -s` over the SSH session's stdin. Output is redacted.
+    #[command(after_help = "EXAMPLE:\n  \
+        lockshell ssh-run --reason \"tail nginx errors\" --host prod-1 -- \\\n  \
+            curl -H \"Authorization: Bearer {{API_TOKEN}}\" https://internal/health")]
+    SshRun(SshRunArgs),
+
     /// Print version
     Version,
 }
@@ -222,6 +232,26 @@ pub struct SshAddHostArgs {
 
     /// Target in the form `user@host` (default port 22) or `user@host:port`
     pub target: String,
+}
+
+#[derive(Parser, Debug)]
+pub struct SshRunArgs {
+    /// Brief human-readable reason for this invocation (recorded in audit log)
+    #[arg(long)]
+    pub reason: String,
+
+    /// Registered host alias (see `lockshell ssh add-host`)
+    #[arg(long)]
+    pub host: String,
+
+    /// Suppress redaction (debugging only — never with real keys)
+    #[arg(long, hide = true)]
+    pub no_redact: bool,
+
+    /// The remote command and arguments. Anything after `--`. May contain
+    /// `{{PLACEHOLDER}}` references that are resolved against the vault.
+    #[arg(last = true, required = true)]
+    pub command: Vec<String>,
 }
 
 #[derive(Parser, Debug)]
