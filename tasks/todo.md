@@ -15,20 +15,20 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` complete · `[!]` blocke
 
 Behavior-neutral refactor. Land before any SSH work.
 
-- [ ] **0.1** Create `Cargo.toml` workspace root, move existing crate to `crates/lockshell/`
+- [x] **0.1** Create `Cargo.toml` workspace root, move existing crate to `crates/lockshell/`
   - Acceptance: `cargo build` builds at workspace root; binary still at `target/debug/lockshell`.
   - Verify: `cargo run -- --version` prints same version.
   - Files: `Cargo.toml` (root, new), `crates/lockshell/Cargo.toml` (moved), all of `src/` → `crates/lockshell/src/`.
 
-- [ ] **0.2** Update `[package]` of `crates/lockshell/Cargo.toml`, bump to `0.2.0-alpha.1`
+- [x] **0.2** Update `[package]` of `crates/lockshell/Cargo.toml`, bump to `0.2.0-alpha.1`
   - Acceptance: `cargo metadata` shows the new path; `cargo publish --dry-run` succeeds for the CLI crate.
   - Files: `crates/lockshell/Cargo.toml`.
 
-- [ ] **0.3** Update CI / scripts that reference `src/` to use `crates/lockshell/src/`
+- [x] **0.3** Update CI / scripts that reference `src/` to use `crates/lockshell/src/`
   - Acceptance: All scripts under `scripts/` and any GH Actions workflow paths are correct.
   - Files: `scripts/*`, `.github/workflows/*.yml` if any.
 
-- [ ] **0.4** Update `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/ARCHITECTURE.md` to reference workspace layout
+- [x] **0.4** Update `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, `docs/ARCHITECTURE.md` to reference workspace layout
   - Acceptance: No stale `src/` references except as historical notes.
   - Files: as listed.
 

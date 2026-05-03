@@ -32,15 +32,19 @@ Required tools:
 
 ```
 lockshell/
-├── src/
-│   ├── main.rs          # entry point, dispatches to commands
-│   ├── cli.rs           # clap definitions for every subcommand
-│   ├── commands/        # one module per subcommand
-│   ├── registry.rs      # placeholder→vault mappings
-│   ├── audit_log.rs     # append-only audit
-│   ├── redact.rs        # regex-based output redaction
-│   ├── vault.rs         # adapter to agent-password (replaced in v0.3)
-│   └── ui.rs            # terminal output helpers
+├── Cargo.toml           # workspace root (members = ["crates/*"])
+├── crates/
+│   └── lockshell/
+│       ├── Cargo.toml
+│       └── src/
+│           ├── main.rs          # entry point, dispatches to commands
+│           ├── cli.rs           # clap definitions for every subcommand
+│           ├── commands/        # one module per subcommand
+│           ├── registry.rs      # placeholder→vault mappings
+│           ├── audit_log.rs     # append-only audit
+│           ├── redact.rs        # regex-based output redaction
+│           ├── vault.rs         # adapter to agent-password (replaced in v0.3)
+│           └── ui.rs            # terminal output helpers
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── THREAT_MODEL.md
@@ -89,7 +93,7 @@ If you change behavior, update:
 - `README.md` for user-visible changes
 - `docs/THREAT_MODEL.md` for security-property changes
 - `docs/ROADMAP.md` if you complete or reshape a planned phase
-- `--help` text in `src/cli.rs` for command flags
+- `--help` text in `crates/lockshell/src/cli.rs` for command flags
 
 ## Security disclosures
 
