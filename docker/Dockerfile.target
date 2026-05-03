@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Lockshell SSH target. Minimal alpine + openssh-server.
+# The hardened sshd config and the CA public key are bind-mounted at run
+# time (see docker-compose.yml) so rotations don't force a rebuild.
+
+FROM alpine:3.19
+
+ARG SSH_USER=lockshell
+ARG SSH_UID=1000
+
+RUN apk add --no-cache \
+      openssh-server \
+      bash \
+      ca-certificates \
+ && ssh-keygen -A \
+ && mkdir -p /run/sshd /etc/ssh/sshd_config.d \
+ && adduser -D -u "${SSH_UID}" -s /bin/bash "${SSH_USER}" \
+ # `adduser -D` leaves the account locked (`!` in shadow). sshd refuses
+ # locked accounts even for pubkey/cert auth. Replace the `!` with `*`:
+ # no valid password (cannot log in via password), but not "locked".
+ && sed -i 's/^lockshell:!:/lockshell:*:/' /etc/shadow \
+ && sed -i \
+      -e 's/^#\?Port .*/Port 22/' \
+      -e 's/^#\?ListenAddress .*/ListenAddress 0.0.0.0/' \
+      -e 's/^#\?LogLevel .*/LogLevel VERBOSE/' \
+      /etc/ssh/sshd_config
+
+EXPOSE 22
+
+# /etc/ssh/sshd_config.d/00-lockshell.conf and /etc/ssh/lockshell_ca.pub
+# are mounted from the host (see docker-compose.yml). sshd reads
+# sshd_config.d/*.conf at startup so the hardened config takes effect
+# without rebuilding.
+ENTRYPOINT ["/usr/sbin/sshd", "-D", "-e"]

@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Five lockshell SSH test targets. Each container runs a hardened sshd
+# that trusts ./ca/lockshell_ca.pub via TrustedUserCAKeys. Bind-mounts
+# avoid rebuilding when the CA rotates or the sshd config changes.
+#
+# Usage:
+#   1. lockshell ca print | sed 's/^cert-authority //' > docker/ca/lockshell_ca.pub
+#   2. (cd docker && docker compose up -d)
+#   3. for h in self-1 self-2 self-3 self-4 self-5; do lockshell ssh add-host $h "lockshell@127.0.0.1:220${h##*-}"; done
+#   4. lockshell ssh self-1   # touch ID -> shell
+#   5. (cd docker && docker compose down)
+
+services:
+  target-1: &target-base
+    build:
+      context: .
+      dockerfile: Dockerfile.target
+    image: lockshell-target:test
+    pull_policy: missing
+    volumes:
+      - ./sshd_config.docker:/etc/ssh/sshd_config.d/00-lockshell.conf:ro
+      - ./ca/lockshell_ca.pub:/etc/ssh/lockshell_ca.pub:ro
+    ports: ["2201:22"]
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z 127.0.0.1 22"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  target-2:
+    <<: *target-base
+    ports: ["2202:22"]
+
+  target-3:
+    <<: *target-base
+    ports: ["2203:22"]
+
+  target-4:
+    <<: *target-base
+    ports: ["2204:22"]
+
+  target-5:
+    <<: *target-base
+    ports: ["2205:22"]

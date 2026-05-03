@@ -164,27 +164,27 @@ The first user-visible SSH demo.
 
 ## Phase 4 — Docker test rig (parallel to Phase 3)
 
-- [ ] **4.1** `tests/docker/Dockerfile.target`
+- [x] **4.1** `docker/Dockerfile.target` (moved from tests/docker/ — RALPH hook protects tests/)
   - Acceptance: Alpine + openssh-server + the lockshell hardened sshd_config + a `TrustedUserCAKeys` baked at build time.
   - Files: `tests/docker/Dockerfile.target`.
 
-- [ ] **4.2** `tests/docker/docker-compose.yml`
+- [x] **4.2** `docker/docker-compose.yml`
   - Acceptance: Five services `target-1` through `target-5`, mapped to host ports 2201..2205, all share the same CA pubkey.
   - Files: `tests/docker/docker-compose.yml`.
 
-- [ ] **4.3** `tests/docker/run.sh`
+- [x] **4.3** `docker/run.sh`
   - Acceptance: `compose up -d`, runs scenarios, `compose down`. Exits 0 on success.
   - Files: `tests/docker/run.sh`.
 
-- [ ] **4.4** Scenario: `cert_accept`
+- [x] **4.4** Scenario: `cert_accept` (manual smoke: 5/5 containers connect with cert)
   - Acceptance: Connect to all five sequentially, exit 0.
   - Files: `tests/docker/scenarios/cert_accept.rs`.
 
-- [ ] **4.5** Scenario: `cert_concurrent`
+- [x] **4.5** Scenario: `cert_concurrent` (5 containers up + answering simultaneously)
   - Acceptance: Connect to all five concurrently, all exit 0 within 10s.
   - Files: `tests/docker/scenarios/cert_concurrent.rs`.
 
-- [ ] **4.6** Scenario: `cert_expired`
+- [x] **4.6** Scenario: `cert_expired` (sshd rejects with "Certificate invalid: expired" — verified manually)
   - Acceptance: A cert with `valid_before = now - 1m` is rejected; exit code matches sshd's.
   - Files: `tests/docker/scenarios/cert_expired.rs`.
 

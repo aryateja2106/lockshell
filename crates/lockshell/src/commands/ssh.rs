@@ -41,6 +41,12 @@ pub fn run(args: SshArgs) -> Result<()> {
     cmd.arg("-o")
         .arg(format!("IdentityAgent={}", agent_sock.display()));
     cmd.arg("-o").arg("IdentitiesOnly=yes");
+    // Recent OpenSSH client builds restrict the cert algorithm allowlist;
+    // make sure our `ecdsa-sha2-nistp256-cert-v01@openssh.com` cert is
+    // always offered. `+` appends to the user's existing allowlist rather
+    // than replacing it.
+    cmd.arg("-o")
+        .arg("PubkeyAcceptedAlgorithms=+ecdsa-sha2-nistp256-cert-v01@openssh.com");
     cmd.arg("-p").arg(host.port.to_string());
     cmd.arg(format!("{}@{}", host.user, host.hostname));
 
