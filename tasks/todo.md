@@ -84,35 +84,35 @@ API surface only. No real SSH yet.
 
 The first user-visible SSH demo.
 
-- [ ] **2.1** Implement `SecureEnclaveSigner` in `crates/lockshell-ssh/src/signer/secure_enclave.rs`
+- [x] **2.1** Implement `SecureEnclaveSigner` in `crates/lockshell-ssh/src/signer/secure_enclave.rs`
   - Acceptance: `load_or_create("lockshell-user")` either finds the existing SE key or creates one with `kSecAttrTokenIDSecureEnclave` + `kSecAttrAccessControl(kSecAccessControlBiometryCurrentSet)`. Signs SHA-256 of `data`. Public key extractable, private key not.
   - Verify: `cargo test -p lockshell-ssh --target macos -- secure_enclave::tests::roundtrip` — generates ephemeral key, signs, verifies via `ring`, deletes.
   - Files: `crates/lockshell-ssh/src/signer/secure_enclave.rs`, `crates/lockshell-ssh/src/signer/secure_enclave/la.rs` (LAContext FFI).
 
-- [ ] **2.2** Implement OpenSSH agent protocol server in `crates/lockshelld/src/ssh_agent.rs`
+- [x] **2.2** Implement OpenSSH agent protocol server in `crates/lockshelld/src/ssh_agent.rs`
   - Acceptance: Listens on `~/.lockshell/agent.sock`. Handles `SSH_AGENTC_REQUEST_IDENTITIES` and `SSH_AGENTC_SIGN_REQUEST`. Identities = the SE signer's public key. Sign requests dispatch to the signer.
   - Verify: `ssh-add -l -a ~/.lockshell/agent.sock` lists the key. `ssh -i /dev/null -o IdentityAgent=~/.lockshell/agent.sock <host>` triggers a signature.
   - Files: `crates/lockshelld/src/ssh_agent.rs`.
 
-- [ ] **2.3** Implement `lockshell ssh <alias>` in `crates/lockshell/src/commands/ssh.rs`
+- [x] **2.3** Implement `lockshell ssh <alias>` in `crates/lockshell/src/commands/ssh.rs`
   - Acceptance: Looks up alias from `~/.config/lockshell/hosts.tsv`. Spawns `ssh` with `IdentityAgent=~/.lockshell/agent.sock` and the registered user/host. Inherits TTY.
   - Verify: Manual smoke against `localhost`.
   - Files: `crates/lockshell/src/commands/ssh.rs`, `crates/lockshell/src/cli.rs`, `crates/lockshell/src/commands/mod.rs`.
 
-- [ ] **2.4** Implement `lockshell ssh init --self`
+- [x] **2.4** Implement `lockshell ssh init --self`
   - Acceptance: Creates SE key if missing, prints `authorized_keys` line, offers clipboard copy.
   - Verify: Run on a clean Mac, line is valid (paste into `~/.ssh/authorized_keys`, then `lockshell ssh self` connects).
   - Files: `crates/lockshell/src/commands/ssh_init.rs`.
 
-- [ ] **2.5** Implement `lockshell ssh add-host <alias> <user>@<hostname>:<port>`
+- [x] **2.5** Implement `lockshell ssh add-host <alias> <user>@<hostname>:<port>`
   - Acceptance: Appends to `~/.config/lockshell/hosts.tsv`, validates duplicates, supports unregister.
   - Files: `crates/lockshell-ssh/src/hosts.rs`, `crates/lockshell/src/commands/ssh_host.rs`.
 
-- [ ] **2.6** Wire `lockshelld` autostart on macOS via `launchctl bootstrap` (manual step in this phase; full LaunchAgent plist in Phase 9)
+- [x] **2.6** Wire `lockshelld` autostart on macOS via `launchctl bootstrap` (manual step in this phase; full LaunchAgent plist in Phase 9)
   - Acceptance: `lockshell doctor` detects daemon-down and prints the bootstrap command.
   - Files: `crates/lockshell/src/commands/doctor.rs`, `docs/MANUAL_QA.md`.
 
-- [ ] **2.7** Audit log row for every SSH session start
+- [x] **2.7** Audit log row for every SSH session start
   - Acceptance: Row format: `timestamp \t reason \t op=ssh \t alias \t host \t principal \t cert_ttl_or_NA`.
   - Files: `crates/lockshell/src/audit_log.rs`.
 

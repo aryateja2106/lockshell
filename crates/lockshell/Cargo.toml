@@ -30,6 +30,10 @@ nu-ansi-term = "0.50"
 # zero out secret values in process memory once they're no longer needed.
 # best-effort against forensic memory dumps; not a defense against active root.
 zeroize = { version = "1.8", features = ["derive"] }
+# Phase 2 SSH module (Touch ID-gated keyless SSH).
+lockshell-ssh = { path = "../lockshell-ssh" }
+base64 = "0.22"
+dirs = "5.0"
 
 [dev-dependencies]
 assert_cmd = "2.0"

@@ -81,6 +81,65 @@ pub fn append(reason: &str, template: &str, secrets: &[String]) -> Result<bool> 
     Ok(true)
 }
 
+/// Append an SSH-related audit entry. Same best-effort semantics as
+/// [`append`] (returns `Ok(false)` if the audit path can't be written).
+///
+/// Row format (tab-separated):
+///   timestamp \t reason \t op=ssh \t alias \t host \t principal \t cert_ttl
+///
+/// `cert_ttl` is `"NA"` in Phase 2 (raw key auth, no cert) and a duration
+/// string like `"5m"` from Phase 3 onward. Never contains private key material.
+pub fn append_ssh(
+    reason: &str,
+    alias: &str,
+    host: &str,
+    principal: &str,
+    cert_ttl: &str,
+) -> Result<bool> {
+    let path = audit_path();
+    if let Some(parent) = path.parent() {
+        if !parent.exists() && std::fs::create_dir_all(parent).is_err() {
+            return Ok(false);
+        }
+    }
+    let f = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(&path);
+    let mut f = match f {
+        Ok(f) => f,
+        Err(_) => return Ok(false),
+    };
+    let _ = fs::set_permissions(&path, Permissions::from_mode(0o600));
+
+    fn truncate(s: &str, max: usize) -> String {
+        if s.len() > max {
+            format!("{}...[truncated]", &s[..max])
+        } else {
+            s.to_string()
+        }
+    }
+
+    const MAX_FIELD: usize = 256;
+    let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    if writeln!(
+        f,
+        "{}\t{}\top=ssh\t{}\t{}\t{}\t{}",
+        timestamp,
+        truncate(reason, MAX_REASON_LEN),
+        truncate(alias, MAX_FIELD),
+        truncate(host, MAX_FIELD),
+        truncate(principal, MAX_FIELD),
+        truncate(cert_ttl, 32),
+    )
+    .is_err()
+    {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 pub fn tail(n: usize) -> Result<Vec<Entry>> {
     let path = audit_path();
     if !path.exists() {

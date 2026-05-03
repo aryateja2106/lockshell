@@ -9,4 +9,7 @@ pub mod register;
 pub mod request;
 pub mod run;
 pub mod setup;
+pub mod ssh;
+pub mod ssh_host;
+pub mod ssh_init;
 pub mod status;

@@ -108,6 +108,35 @@ pub fn run(_args: DoctorArgs) -> Result<()> {
         }
     }
 
+    // 7. SSH module readiness (lockshelld + agent socket).
+    println!();
+    println!("ssh module:");
+    let home = std::env::var("HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default();
+    let control_sock = home.join(".lockshell/control.sock");
+    let agent_sock = home.join(".lockshell/agent.sock");
+    if control_sock.exists() {
+        ui::ok(&format!(
+            "lockshelld control socket present at {}",
+            control_sock.display()
+        ));
+    } else {
+        ui::warn("lockshelld is not running");
+        ui::hint("Start with: cargo run -p lockshelld -- --foreground &");
+        ui::hint("Phase 9 will replace this with a launchd plist.");
+        issues += 1;
+    }
+    if agent_sock.exists() {
+        ui::ok(&format!(
+            "ssh agent socket present at {}",
+            agent_sock.display()
+        ));
+    } else {
+        ui::warn("ssh agent socket missing (start lockshelld first)");
+        issues += 1;
+    }
+
     println!();
     if blockers > 0 {
         ui::err(&format!(

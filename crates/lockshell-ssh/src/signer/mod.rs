@@ -6,6 +6,9 @@
 
 use anyhow::Result;
 
+#[cfg(target_os = "macos")]
+pub mod secure_enclave;
+
 /// Produces SSH-format signatures over arbitrary data.
 ///
 /// Implementors hold a reference to a non-extractable key. The `reason` passed
