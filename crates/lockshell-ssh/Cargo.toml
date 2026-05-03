@@ -16,6 +16,10 @@ sha2 = "0.10"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
+# Runtime crypto provider for the software ECDSA P-256 signer used as a
+# stress-mode fallback when the Secure Enclave is unavailable (non-Aqua
+# subshells, CI without SEP). Never used in production.
+ring = "0.17"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "2.11"
@@ -25,4 +29,3 @@ core-foundation-sys = "0.8"
 
 [dev-dependencies]
 tempfile = "3"
-ring = "0.17"

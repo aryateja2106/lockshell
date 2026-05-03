@@ -24,13 +24,12 @@ pub fn run(args: CaArgs) -> Result<()> {
 fn print_ca() -> Result<()> {
     use anyhow::Context;
     use base64::Engine;
-    use lockshell_ssh::{SecureEnclaveSigner, Signer};
+    use lockshell_ssh::labels;
 
-    let signer = SecureEnclaveSigner::load_or_create("lockshell-ca")
-        .context("loading or creating the lockshell CA in the Secure Enclave")?;
+    let signer = labels::load_ca_signer_dyn().context("loading or creating the lockshell CA")?;
     let blob = signer.public_key_blob()?;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&blob);
-    let label = format!("lockshell-ca@{}", host_label());
+    let label = format!("{}@{}", labels::ca_label(), host_label());
 
     // The `cert-authority` prefix tells `sshd` (when used in authorized_keys)
     // or `ssh-keygen -L` that this is a CA, not a regular host key.
@@ -53,20 +52,18 @@ fn print_ca() -> Result<()> {
 #[cfg(target_os = "macos")]
 fn rotate_ca() -> Result<()> {
     use anyhow::Context;
-    use lockshell_ssh::{SecureEnclaveSigner, Signer};
+    use lockshell_ssh::{labels, SecureEnclaveSigner, Signer};
 
     eprintln!("WARNING: rotating the CA invalidates every outstanding lockshell-issued cert.");
     eprintln!("Targets that trust the old CA will reject your sessions until they receive the new pubkey.");
     eprintln!();
 
-    // Best-effort delete of the old CA key. Errors are warned but not fatal —
-    // the user may have nuked it manually already.
-    if let Err(e) = SecureEnclaveSigner::delete("lockshell-ca") {
-        eprintln!("warning: could not delete old CA key: {}", e);
+    let label = labels::ca_label();
+    if let Err(e) = SecureEnclaveSigner::delete(label) {
+        eprintln!("warning: could not delete old CA key '{}': {}", label, e);
     }
 
-    let signer = SecureEnclaveSigner::load_or_create("lockshell-ca")
-        .context("creating new lockshell CA after rotation")?;
+    let signer = labels::load_ca_signer().context("creating new lockshell CA after rotation")?;
     let _ = signer.public_key_blob()?;
     eprintln!("rotated. Run `lockshell ca print` to see the new public key.");
     Ok(())

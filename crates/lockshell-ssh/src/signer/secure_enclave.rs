@@ -6,8 +6,9 @@
 //! Touch ID consent prompt because the key's access control includes
 //! `kSecAccessControlBiometryCurrentSet | kSecAccessControlPrivateKeyUsage`.
 //!
-//! Test variant `load_or_create_for_test` omits the biometric flag so CI runs
-//! headless. The bio variant is the one used at runtime.
+//! Variant `load_or_create_no_biometric` omits the biometric flag so unit
+//! tests and the stress-test rig run headless. The bio variant is the one
+//! used at runtime; the no-bio variant is documented as unsafe-for-production.
 
 #![cfg(target_os = "macos")]
 
@@ -89,10 +90,22 @@ impl SecureEnclaveSigner {
         })
     }
 
-    /// CI / unit-test constructor: omits the biometric flag so the call does
-    /// not block on a Touch ID prompt. Still pinned to the Secure Enclave.
-    #[cfg(test)]
-    pub fn load_or_create_for_test(label: &str) -> Result<Self> {
+    /// **DANGER — stress / CI only.** Constructs an SE-backed key WITHOUT a
+    /// biometric ACL gate. Every signing operation succeeds without a Touch ID
+    /// prompt. The key is still non-extractable inside the SEP, so it cannot
+    /// leak off the device, but anyone with code-execution as the daemon's
+    /// uid can use it to authenticate.
+    ///
+    /// Used by:
+    /// - the unit test suite (`load_or_create_no_biometric("lockshell-test-…")`)
+    /// - the stress-test rig (gated on `LOCKSHELL_STRESS_MODE=1` plus the
+    ///   distinct `lockshell-stress-*` labels via [`crate::labels`]).
+    ///
+    /// Never call with the production `lockshell-user` / `lockshell-ca`
+    /// labels. The `lockshell-stress-*` labels must NOT be reused for any
+    /// real workflow — they live alongside production keys in the keychain
+    /// only as a known-unsafe escape hatch for benchmarks.
+    pub fn load_or_create_no_biometric(label: &str) -> Result<Self> {
         if let Some(existing) = lookup_key(label)? {
             return Ok(Self {
                 key: existing,
@@ -419,7 +432,7 @@ mod tests {
     #[test]
     fn roundtrip_se_signature() {
         let (label, _g) = fresh_label();
-        let signer = match SecureEnclaveSigner::load_or_create_for_test(&label) {
+        let signer = match SecureEnclaveSigner::load_or_create_no_biometric(&label) {
             Ok(s) => s,
             Err(e) => {
                 // CI / VMs without SEP: skip rather than fail loudly.

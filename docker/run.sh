@@ -28,7 +28,7 @@ if [[ ! -s "$CA_PUB" ]]; then
     | sed -n 's/^cert-authority //p' \
     > "$CA_PUB"
   if [[ ! -s "$CA_PUB" ]]; then
-    echo "lockshell ca print produced no output. Run 'lockshell ssh init' first."
+    echo "lockshell ca print produced no output. Run 'lockshell ssh-init' first."
     exit 1
   fi
 fi
@@ -52,7 +52,7 @@ echo "✓ all targets healthy"
 # Step 4: register aliases (idempotent).
 if command -v lockshell >/dev/null 2>&1; then
   for i in 1 2 3 4 5; do
-    lockshell ssh add-host "self-${i}" "lockshell@127.0.0.1:220${i}" 2>/dev/null || true
+    lockshell ssh-add-host "self-${i}" "lockshell@127.0.0.1:220${i}" 2>/dev/null || true
   done
   echo "✓ host aliases registered: self-1 .. self-5"
 fi

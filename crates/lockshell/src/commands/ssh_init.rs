@@ -22,16 +22,22 @@ use anyhow::Result;
 pub fn run(args: SshInitArgs) -> Result<()> {
     use anyhow::Context;
     use base64::Engine;
-    use lockshell_ssh::{SecureEnclaveSigner, Signer};
+    use lockshell_ssh::labels;
 
     if args.self_only {
         // Same-Mac shortcut: just the user key + authorized_keys line.
-        let signer = SecureEnclaveSigner::load_or_create("lockshell-user")
-            .context("failed to load or create the Secure Enclave user key")?;
+        let signer = labels::load_user_signer_dyn()
+            .context("failed to load or create the user signing key")?;
         let blob = signer.public_key_blob()?;
         let b64 = base64::engine::general_purpose::STANDARD.encode(&blob);
         let host = host_label();
-        let line = format!("{} {} lockshell-user@{}", signer.algorithm(), b64, host);
+        let line = format!(
+            "{} {} {}@{}",
+            signer.algorithm(),
+            b64,
+            labels::user_label(),
+            host
+        );
         println!("{}", line);
         eprintln!();
         eprintln!(
@@ -45,22 +51,30 @@ pub fn run(args: SshInitArgs) -> Result<()> {
 
     // Default mode: bootstrap CA + user key. Print the CA cert-authority line
     // for distribution to managed targets.
-    let user = SecureEnclaveSigner::load_or_create("lockshell-user")
-        .context("failed to load or create the Secure Enclave user key")?;
+    let user =
+        labels::load_user_signer_dyn().context("failed to load or create the user signing key")?;
     let _ = user.public_key_blob()?; // touch it so the SE entry materialises
 
-    let ca = SecureEnclaveSigner::load_or_create("lockshell-ca")
-        .context("failed to load or create the Secure Enclave CA key")?;
+    let ca = labels::load_ca_signer_dyn().context("failed to load or create the CA signing key")?;
     let ca_blob = ca.public_key_blob()?;
     let ca_b64 = base64::engine::general_purpose::STANDARD.encode(&ca_blob);
     let host = host_label();
 
-    eprintln!("✓ user signing key ready (label: lockshell-user)");
-    eprintln!("✓ CA key ready          (label: lockshell-ca)");
+    eprintln!("✓ user signing key ready (label: {})", labels::user_label());
+    eprintln!("✓ CA key ready          (label: {})", labels::ca_label());
+    if labels::stress_mode() {
+        eprintln!("⚠ STRESS MODE — keys are non-biometric. Do not use in production.");
+    }
     eprintln!();
     eprintln!("CA public key — distribute to managed targets:");
     eprintln!();
-    println!("{} {} lockshell-ca@{}", ca.algorithm(), ca_b64, host);
+    println!(
+        "{} {} {}@{}",
+        ca.algorithm(),
+        ca_b64,
+        labels::ca_label(),
+        host
+    );
     eprintln!();
     eprintln!("Per-target setup:");
     eprintln!(

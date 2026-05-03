@@ -8,9 +8,11 @@
 
 pub mod ca;
 pub mod hosts;
+pub mod labels;
 pub mod signer;
 pub mod wire;
 
+pub use signer::software::SoftwareEcdsaSigner;
 pub use signer::Signer;
 
 #[cfg(target_os = "macos")]

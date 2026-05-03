@@ -8,6 +8,7 @@ use anyhow::Result;
 
 #[cfg(target_os = "macos")]
 pub mod secure_enclave;
+pub mod software;
 
 /// Produces SSH-format signatures over arbitrary data.
 ///

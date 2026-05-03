@@ -198,27 +198,92 @@ fn build_identities_answer(backend: &AgentBackend) -> Result<Vec<u8>> {
     let user_blob = backend.user_signer.public_key_blob()?;
     let comment_host = hostname();
 
-    // When a CA is wired, advertise a freshly minted cert. If the mint fails
-    // (e.g. user dismissed the Touch ID prompt for the CA key), fall back to
-    // advertising the raw user key so the user still has a usable identity —
-    // and log the reason so the failure is surfaced in journalctl/Console.
-    let (advertised_blob, comment) = match backend.cert_minter.as_ref() {
-        Some(minter) => match minter.mint_user_cert(&user_blob) {
-            Ok(cert) => (cert, format!("lockshell-user-cert@{comment_host}")),
-            Err(err) => {
-                eprintln!("lockshelld: cert mint failed, advertising raw key: {err}");
-                (user_blob, format!("lockshell-user@{comment_host}"))
+    // Build the identity list. When a cert minter is wired we publish BOTH
+    // identities: the raw user pubkey and a freshly minted cert. OpenSSH's
+    // client requires the raw pubkey identity to be present (matched to an
+    // `IdentityFile`) before it will offer the cert it sees in the agent.
+    // If the mint fails we fall back to advertising only the raw key.
+    let mut identities: Vec<(Vec<u8>, String)> = Vec::with_capacity(2);
+    identities.push((user_blob.clone(), format!("lockshell-user@{comment_host}")));
+    if let Some(minter) = backend.cert_minter.as_ref() {
+        match minter.mint_user_cert(&user_blob) {
+            Ok(cert) => {
+                // Side effect: persist the freshly minted cert at
+                // `~/.lockshell/user-cert.pub` so the lockshell CLI can pass
+                // it to OpenSSH via `CertificateFile`. OpenSSH 10.x will not
+                // offer an agent-only cert during the auth attempt list; it
+                // requires the cert as a file (the raw pubkey lives in the
+                // agent and signs the challenge).
+                if let Err(err) =
+                    persist_user_cert(&cert, "ecdsa-sha2-nistp256-cert-v01@openssh.com")
+                {
+                    eprintln!("lockshelld: warning — could not write user-cert.pub: {err}");
+                }
+                identities.push((cert, format!("lockshell-user-cert@{comment_host}")));
             }
-        },
-        None => (user_blob, format!("lockshell-user@{comment_host}")),
-    };
+            Err(err) => {
+                eprintln!("lockshelld: cert mint failed, advertising raw key only: {err}");
+            }
+        }
+    }
 
-    let mut out = Vec::with_capacity(1 + 4 + 4 + advertised_blob.len() + 4 + comment.len());
+    let mut out = Vec::with_capacity(64);
     out.push(SSH_AGENT_IDENTITIES_ANSWER);
-    lockshell_ssh::wire::encode_uint32(&mut out, 1);
-    lockshell_ssh::wire::encode_string(&mut out, &advertised_blob);
-    lockshell_ssh::wire::encode_string(&mut out, comment.as_bytes());
+    lockshell_ssh::wire::encode_uint32(&mut out, identities.len() as u32);
+    for (blob, comment) in &identities {
+        lockshell_ssh::wire::encode_string(&mut out, blob);
+        lockshell_ssh::wire::encode_string(&mut out, comment.as_bytes());
+    }
     Ok(out)
+}
+
+/// Atomically write the most recently minted user cert to
+/// `~/.lockshell/user-cert.pub`. Best-effort: callers tolerate failure.
+fn persist_user_cert(cert_blob: &[u8], algo: &str) -> Result<()> {
+    use base64::Engine;
+    use std::io::Write;
+
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| anyhow::anyhow!("HOME unset; cannot persist user-cert.pub"))?;
+    let dir = std::path::PathBuf::from(home).join(".lockshell");
+    std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+
+    let path = dir.join("user-cert.pub");
+
+    // Concurrent agent connections may race here; use a per-call unique tmp
+    // suffix (pid + monotonic nanos) so each writer has its own file. Rename
+    // is atomic on POSIX; the last writer wins, and `path` always reflects
+    // a fully-written cert.
+    let pid = std::process::id();
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!("user-cert.pub.tmp.{pid}.{nanos}"));
+
+    let b64 = base64::engine::general_purpose::STANDARD.encode(cert_blob);
+    let line = format!("{algo} {b64} lockshell-user-cert@daemon\n");
+
+    {
+        let mut f =
+            std::fs::File::create(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        f.write_all(line.as_bytes())
+            .with_context(|| format!("writing {}", tmp.display()))?;
+    }
+    if let Err(e) = std::fs::rename(&tmp, &path) {
+        // Lossy fallback: the rename may have been beaten by another writer
+        // that also won. Best-effort cleanup of our tmp; the visible
+        // user-cert.pub is fine either way (every cert is signed by the
+        // same CA over the same user pubkey, so any concurrent writer's
+        // cert is equally usable for auth).
+        let _ = std::fs::remove_file(&tmp);
+        return Err(anyhow::anyhow!(
+            "renaming {} -> {}: {e}",
+            tmp.display(),
+            path.display()
+        ));
+    }
+    Ok(())
 }
 
 fn build_sign_response(body: &[u8], backend: &AgentBackend) -> Result<Vec<u8>> {
@@ -381,7 +446,11 @@ mod tests {
     }
 
     #[test]
-    fn identities_answer_advertises_cert_when_minter_present() {
+    fn identities_answer_advertises_raw_then_cert_when_minter_present() {
+        // Agent now publishes BOTH the raw user pubkey AND a freshly minted
+        // cert. OpenSSH 10.x clients require the raw pubkey to be advertised
+        // (matched against an `IdentityFile`) before they will offer a cert
+        // they see in the agent — see commit message for details.
         let q = &[0x04; 65];
         let blob = raw_ecdsa_blob(q);
         let backend = AgentBackend::with_cert_minter(
@@ -389,11 +458,25 @@ mod tests {
             Arc::new(EchoMinter),
         );
         let resp = build_identities_answer(&backend).unwrap();
-        let (advertised, rest) = lockshell_ssh::wire::decode_string(&resp[5..]).unwrap();
-        let (alg, _) = lockshell_ssh::wire::decode_string(advertised).unwrap();
+        assert_eq!(resp[0], SSH_AGENT_IDENTITIES_ANSWER);
+        // identity count = 2
+        assert_eq!(&resp[1..5], &[0, 0, 0, 2]);
+
+        // Identity #1: raw user pubkey, comment "lockshell-user@..."
+        let (advertised_1, rest) = lockshell_ssh::wire::decode_string(&resp[5..]).unwrap();
+        assert_eq!(advertised_1, blob.as_slice());
+        let (comment_1, rest) = lockshell_ssh::wire::decode_string(rest).unwrap();
+        assert!(std::str::from_utf8(comment_1)
+            .unwrap()
+            .starts_with("lockshell-user@"));
+
+        // Identity #2: minted cert (algorithm string = cert algorithm),
+        // comment "lockshell-user-cert@..."
+        let (advertised_2, rest) = lockshell_ssh::wire::decode_string(rest).unwrap();
+        let (alg, _) = lockshell_ssh::wire::decode_string(advertised_2).unwrap();
         assert_eq!(alg, CERT_ALG_ECDSA_P256.as_bytes());
-        let (comment, _) = lockshell_ssh::wire::decode_string(rest).unwrap();
-        assert!(std::str::from_utf8(comment)
+        let (comment_2, _) = lockshell_ssh::wire::decode_string(rest).unwrap();
+        assert!(std::str::from_utf8(comment_2)
             .unwrap()
             .starts_with("lockshell-user-cert@"));
     }

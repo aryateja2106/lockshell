@@ -100,9 +100,27 @@ pub fn run(args: SshRunArgs) -> Result<()> {
     // Build the local ssh invocation. Secrets do NOT appear on argv —
     // the remote command body is fed via stdin.
     let agent_sock = agent_socket_path()?;
+    let user_pub = user_pubkey_path()?;
+    let user_cert = user_cert_path()?;
+
+    // Trigger a REQUEST_IDENTITIES round-trip with the daemon so it mints a
+    // fresh cert and persists it at `~/.lockshell/user-cert.pub`. Spawning
+    // `ssh` immediately afterwards picks up the file via `CertificateFile`.
+    // OpenSSH 10.x will not offer agent-only certs during the attempt list,
+    // so the disk-cached cert is required for cert-based auth.
+    refresh_user_cert(&agent_sock);
+
     let mut ssh = Command::new("ssh");
     ssh.arg("-o")
         .arg(format!("IdentityAgent={}", agent_sock.display()));
+    if user_pub.exists() {
+        ssh.arg("-o")
+            .arg(format!("IdentityFile={}", user_pub.display()));
+    }
+    if user_cert.exists() {
+        ssh.arg("-o")
+            .arg(format!("CertificateFile={}", user_cert.display()));
+    }
     ssh.arg("-o").arg("IdentitiesOnly=yes");
     ssh.arg("-o")
         .arg("PubkeyAcceptedAlgorithms=+ecdsa-sha2-nistp256-cert-v01@openssh.com");
@@ -152,4 +170,29 @@ pub fn run(args: SshRunArgs) -> Result<()> {
 fn agent_socket_path() -> Result<std::path::PathBuf> {
     let home = dirs::home_dir().context("HOME not set; cannot locate ~/.lockshell/agent.sock")?;
     Ok(home.join(".lockshell").join("agent.sock"))
+}
+
+fn user_pubkey_path() -> Result<std::path::PathBuf> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate ~/.lockshell/user.pub")?;
+    Ok(home.join(".lockshell").join("user.pub"))
+}
+
+fn user_cert_path() -> Result<std::path::PathBuf> {
+    let home =
+        dirs::home_dir().context("HOME not set; cannot locate ~/.lockshell/user-cert.pub")?;
+    Ok(home.join(".lockshell").join("user-cert.pub"))
+}
+
+/// Force a REQUEST_IDENTITIES round-trip with the agent so the daemon mints
+/// a fresh cert and persists it on disk for `CertificateFile=` to pick up.
+/// Best-effort — if `ssh-add` is missing or the agent socket is dead the
+/// caller still proceeds (a stale or absent cert just yields a clean
+/// publickey-denied error from sshd, identical to the no-cert case).
+fn refresh_user_cert(agent_sock: &std::path::Path) {
+    let _ = Command::new("ssh-add")
+        .arg("-l")
+        .env("SSH_AUTH_SOCK", agent_sock)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
 }

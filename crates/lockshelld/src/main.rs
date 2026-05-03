@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -51,12 +51,27 @@ fn main() -> Result<()> {
 
     runtime.block_on(async move {
         let backend = build_agent_backend();
+        let user_pub_path = lockshell_dir.join("user.pub");
 
         let rpc_task = tokio::spawn(async move { rpc::serve(&control_path).await });
         let agent_task = match backend {
-            Some(backend) => Some(tokio::spawn(ssh_agent::serve_with_backend(
-                agent_path, backend,
-            ))),
+            Some(backend) => {
+                if let Err(e) = write_user_pubkey(&user_pub_path, &*backend.user_signer) {
+                    eprintln!(
+                        "lockshelld: warning — could not write user.pub at {}: {}",
+                        user_pub_path.display(),
+                        e
+                    );
+                } else {
+                    eprintln!(
+                        "lockshelld: published user pubkey at {}",
+                        user_pub_path.display()
+                    );
+                }
+                Some(tokio::spawn(ssh_agent::serve_with_backend(
+                    agent_path, backend,
+                )))
+            }
             None => {
                 eprintln!(
                     "lockshelld: ssh-agent disabled (no Secure Enclave signer on this platform)"
@@ -82,9 +97,58 @@ fn lockshell_dir() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(".lockshell"))
 }
 
-/// Default principal for minted user certs. Falls back to `lockshell-user`
-/// when `$USER` is unset (Launch agent / system contexts).
+/// Persist the daemon's current user pubkey to disk in `authorized_keys`
+/// format so the lockshell CLI can pass it to OpenSSH via `IdentityFile`.
+///
+/// Without this file the OpenSSH client refuses to offer the agent's
+/// certificate identity (cert keys in the agent only get tried when the
+/// underlying user pubkey is also configured as an `IdentityFile`).
+///
+/// Best-effort: failure is logged but does not abort the daemon, since
+/// the agent socket itself remains functional for callers that pass an
+/// `IdentityFile` explicitly.
+fn write_user_pubkey(path: &Path, signer: &dyn Signer) -> Result<()> {
+    use base64::Engine;
+    use std::io::Write;
+
+    let blob = signer.public_key_blob().context("rendering user pubkey")?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&blob);
+    let line = format!("{} {} lockshell-user@daemon\n", signer.algorithm(), b64);
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    let tmp = path.with_extension("pub.tmp");
+    {
+        let mut f =
+            std::fs::File::create(&tmp).with_context(|| format!("creating {}", tmp.display()))?;
+        f.write_all(line.as_bytes())
+            .with_context(|| format!("writing {}", tmp.display()))?;
+    }
+    std::fs::rename(&tmp, path)
+        .with_context(|| format!("renaming {} -> {}", tmp.display(), path.display()))?;
+    Ok(())
+}
+
+/// Default principal for minted user certs.
+///
+/// Resolution order:
+/// 1. `LOCKSHELL_DEFAULT_PRINCIPAL` env var (explicit override).
+/// 2. `$USER` (the most common identity match for managed targets where
+///    accounts mirror the operator's Mac account).
+/// 3. Hardcoded `lockshell-user` (Launch agent / system contexts).
+///
+/// The principal is recorded inside every cert the daemon mints. The
+/// remote sshd compares it to the connecting username, so this needs to
+/// match the account name on the target. Stress rigs and containers
+/// where the remote user differs from `$USER` should set the env var.
 fn default_principal() -> String {
+    if let Ok(p) = std::env::var("LOCKSHELL_DEFAULT_PRINCIPAL") {
+        if !p.is_empty() {
+            return p;
+        }
+    }
     std::env::var("USER")
         .ok()
         .filter(|u| !u.is_empty())
@@ -121,15 +185,19 @@ fn build_agent_backend() -> Option<Arc<AgentBackend>> {
 
 #[cfg(target_os = "macos")]
 fn build_user_signer() -> Option<Arc<dyn Signer>> {
-    // SE access can fail at startup for benign reasons: unsigned binary, no
-    // SEP available (Intel Mac, virtualization), missing entitlements, no UI
-    // to consent to a biometric ACL. Don't crash the daemon — log and skip
-    // the ssh-agent task so the rest of the daemon still runs.
-    match lockshell_ssh::SecureEnclaveSigner::load_or_create("lockshell-user") {
-        Ok(signer) => Some(Arc::new(signer) as Arc<dyn Signer>),
+    if lockshell_ssh::labels::stress_mode() {
+        eprintln!(
+            "lockshelld: STRESS MODE ACTIVE — user key label '{}' (non-biometric, \
+             SE preferred, software fallback if SEP unreachable). \
+             DO NOT use this mode for real workflows.",
+            lockshell_ssh::labels::user_label()
+        );
+    }
+    match lockshell_ssh::labels::load_user_signer_dyn() {
+        Ok(boxed) => Some(Arc::from(boxed)),
         Err(e) => {
             eprintln!(
-                "lockshelld: ssh-agent disabled (Secure Enclave unavailable: {}). \
+                "lockshelld: ssh-agent disabled (signer unavailable: {}). \
                  lockshell ssh will not work until this is resolved.",
                 e
             );
@@ -140,7 +208,7 @@ fn build_user_signer() -> Option<Arc<dyn Signer>> {
 
 #[cfg(target_os = "macos")]
 fn build_cert_minter() -> Option<Arc<dyn CertMinter>> {
-    match lockshell_ssh::SecureEnclaveSigner::load_or_create("lockshell-ca") {
+    match lockshell_ssh::labels::load_ca_signer_dyn() {
         Ok(ca_signer) => match ca_minter::CaCertMinter::new(ca_signer, default_principal()) {
             Ok(minter) => Some(Arc::new(minter) as Arc<dyn CertMinter>),
             Err(e) => {
@@ -154,7 +222,7 @@ fn build_cert_minter() -> Option<Arc<dyn CertMinter>> {
         },
         Err(e) => {
             eprintln!(
-                "lockshelld: cert minting disabled (CA Secure Enclave key unavailable: {}). \
+                "lockshelld: cert minting disabled (CA signer unavailable: {}). \
                  Agent will advertise the raw user key as a fallback.",
                 e
             );
@@ -171,7 +239,7 @@ mod ca_minter {
 
     use anyhow::Result;
     use lockshell_ssh::ca::{Ca, CertOptions, Clock, SystemClock, DEFAULT_TTL_SECS};
-    use lockshell_ssh::{SecureEnclaveSigner, Signer};
+    use lockshell_ssh::Signer;
 
     use super::CertMinter;
 
@@ -187,8 +255,8 @@ mod ca_minter {
     }
 
     impl CaCertMinter {
-        pub fn new(ca_signer: SecureEnclaveSigner, principal: String) -> Result<Self> {
-            let leaked: &'static (dyn Signer + Send + Sync) = Box::leak(Box::new(ca_signer));
+        pub fn new(ca_signer: Box<dyn Signer>, principal: String) -> Result<Self> {
+            let leaked: &'static dyn Signer = Box::leak(ca_signer);
             let ca = Ca::new(leaked)?;
             Ok(Self {
                 ca,
