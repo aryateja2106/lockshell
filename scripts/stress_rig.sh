@@ -52,6 +52,12 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 export LOCKSHELL_STRESS_MODE=1
+# Stress mode is gated behind a second env var so a stray
+# `LOCKSHELL_STRESS_MODE=1` in a shell rc file cannot silently
+# downgrade the daemon's signer to the on-disk software path. The
+# stress rig is the only legitimate caller of this combo — never set
+# both vars by hand.
+export LOCKSHELL_I_UNDERSTAND_THIS_IS_INSECURE=yes
 
 TS="$(date +%Y%m%d-%H%M%S)"
 PROOF_DIR="$ROOT/docs/proofs"

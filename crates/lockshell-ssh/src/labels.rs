@@ -21,11 +21,46 @@ use crate::SecureEnclaveSigner;
 use crate::signer::Signer;
 use crate::SoftwareEcdsaSigner;
 
-/// `true` when `LOCKSHELL_STRESS_MODE=1` is set in the environment.
+/// `true` when both `LOCKSHELL_STRESS_MODE=1` AND
+/// `LOCKSHELL_I_UNDERSTAND_THIS_IS_INSECURE=yes` are set.
+///
+/// The double-gate exists because stress mode disables the Secure Enclave
+/// biometric ACL and persists a software ECDSA private key under
+/// `~/.lockshell/stress-keys/`. A single env var is too easy to leave
+/// behind in a shell rc file or login plist; the explicit acknowledgement
+/// var prevents silent fallback to the unsafe path.
+///
+/// If only `LOCKSHELL_STRESS_MODE=1` is set, this aborts the process at
+/// first call with a loud error so the misconfiguration surfaces
+/// immediately instead of silently producing on-disk software keys.
 pub fn stress_mode() -> bool {
-    std::env::var_os("LOCKSHELL_STRESS_MODE")
-        .map(|v| v != "0" && !v.is_empty())
-        .unwrap_or(false)
+    use std::sync::OnceLock;
+    static GATE: OnceLock<bool> = OnceLock::new();
+    *GATE.get_or_init(|| {
+        let on = std::env::var_os("LOCKSHELL_STRESS_MODE")
+            .map(|v| v != "0" && !v.is_empty())
+            .unwrap_or(false);
+        if on {
+            let acked = std::env::var("LOCKSHELL_I_UNDERSTAND_THIS_IS_INSECURE")
+                .map(|v| v == "yes")
+                .unwrap_or(false);
+            if !acked {
+                eprintln!(
+                    "lockshell: refusing to enter stress mode.\n  \
+                     LOCKSHELL_STRESS_MODE=1 is set, but \
+                     LOCKSHELL_I_UNDERSTAND_THIS_IS_INSECURE=yes is not.\n  \
+                     Stress mode disables Secure Enclave biometric gating and \
+                     persists a software ECDSA P-256 private key under \
+                     ~/.lockshell/stress-keys/. Never enable it for any \
+                     workflow that touches production keys, hosts, or \
+                     credentials. Set both env vars only inside the \
+                     scripts/stress_rig.sh harness."
+                );
+                std::process::exit(2);
+            }
+        }
+        on
+    })
 }
 
 /// SE label for the user signing key.

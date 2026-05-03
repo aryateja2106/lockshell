@@ -146,7 +146,38 @@ fn write_user_pubkey(path: &Path, signer: &dyn Signer) -> Result<()> {
 fn default_principal() -> String {
     if let Ok(p) = std::env::var("LOCKSHELL_DEFAULT_PRINCIPAL") {
         if !p.is_empty() {
-            return p;
+            // The principal lands inside every minted cert and is
+            // matched by sshd against the connecting username. An
+            // attacker that can set this env var (e.g. a malicious
+            // process inheriting the daemon's environment, or a
+            // misconfigured launchd plist) could otherwise mint
+            // certs for `root` / `admin` and silently elevate over
+            // any host whose AuthorizedPrincipalsFile matches.
+            //
+            // Allowed: lowercase ASCII, digits, `_`, `-`. Length
+            // <= 32. Reserved names refused outright.
+            const RESERVED: &[&str] = &[
+                "root", "admin", "wheel", "sudo", "toor", "operator", "_sshd",
+            ];
+            let len_ok = p.len() <= 32;
+            let charset_ok = p.chars().all(|c| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-'
+            });
+            let starts_ok = p
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_lowercase() || c == '_')
+                .unwrap_or(false);
+            let reserved = RESERVED.contains(&p.as_str());
+            if len_ok && charset_ok && starts_ok && !reserved {
+                return p;
+            }
+            eprintln!(
+                "lockshelld: rejecting LOCKSHELL_DEFAULT_PRINCIPAL='{}'.\n  \
+                 Principals must match `^[a-z_][a-z0-9_-]{{0,31}}$` and \
+                 must not be one of {:?}. Falling back to $USER.",
+                p, RESERVED
+            );
         }
     }
     std::env::var("USER")
