@@ -1,0 +1,27 @@
+[package]
+name = "lockshell-tui"
+version = "0.1.0"
+edition = "2021"
+authors = ["Arya Teja Rudraraju <aryayt55@gmail.com>"]
+license = "Apache-2.0"
+description = "Terminal UI for lockshell — VS Code-style multi-pane SSH session manager."
+repository = "https://github.com/aryateja2106/lockshell"
+rust-version = "1.74"
+
+[[bin]]
+name = "lockshell-tui"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+ratatui = "0.28"
+crossterm = "0.28"
+# Portable PTY abstraction for spawning child shells with proper TTY
+# semantics (resize, signals). Cross-platform; we use it for the SSH
+# panes so OpenSSH gets a real PTY when the user requests `permit-pty`.
+portable-pty = "0.9"
+lockshell-ssh = { path = "../lockshell-ssh" }
+
+[dev-dependencies]
+tempfile = "3"
