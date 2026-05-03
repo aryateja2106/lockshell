@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod audit;
+pub mod ca;
 pub mod dashboard;
 pub mod doctor;
 pub mod help_me;

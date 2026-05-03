@@ -6,6 +6,7 @@
 //! in [`wire`]. Phase 2 adds the macOS Secure Enclave signer (gated by
 //! `target_os = "macos"`) and the host alias registry in [`hosts`].
 
+pub mod ca;
 pub mod hosts;
 pub mod signer;
 pub mod wire;

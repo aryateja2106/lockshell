@@ -87,6 +87,13 @@ pub enum Command {
     #[command(after_help = "EXAMPLE:\n    lockshell ssh add-host self arya@localhost:22")]
     SshAddHost(SshAddHostArgs),
 
+    /// Manage the local SSH user-certificate authority.
+    ///
+    /// The CA is a separate Secure Enclave key (label `lockshell-ca`).
+    /// Distribute the CA public key to managed targets and configure them
+    /// with `TrustedUserCAKeys` to enable cert-based auth.
+    Ca(CaArgs),
+
     /// Print version
     Version,
 }
@@ -215,6 +222,25 @@ pub struct SshAddHostArgs {
 
     /// Target in the form `user@host` (default port 22) or `user@host:port`
     pub target: String,
+}
+
+#[derive(Parser, Debug)]
+pub struct CaArgs {
+    #[command(subcommand)]
+    pub cmd: CaCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CaCommand {
+    /// Print the lockshell CA public key as a `cert-authority` line.
+    ///
+    /// Append the line (without `cert-authority`) to /etc/ssh/lockshell_ca.pub
+    /// on managed targets, then set `TrustedUserCAKeys /etc/ssh/lockshell_ca.pub`
+    /// in their sshd_config.
+    Print,
+
+    /// Rotate the CA. Invalidates every outstanding lockshell-issued cert.
+    Rotate,
 }
 
 #[derive(Parser, Debug)]

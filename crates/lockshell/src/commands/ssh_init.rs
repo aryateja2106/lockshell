@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! `lockshell ssh init [--self]` — bootstrap the user's Secure Enclave key.
+//! `lockshell ssh init` — bootstrap the SSH module.
 //!
-//! Creates the SE-resident `lockshell-user` key if absent and prints an
-//! `authorized_keys` line for the public component. With `--self`, also
-//! prints follow-up instructions and best-effort copies the line to the
-//! macOS clipboard via `pbcopy`.
+//! Default mode (no flag): creates both the user signing key and the user CA
+//! key in the Secure Enclave, prints the CA's `cert-authority` line for
+//! distribution to managed targets, and points at the hardened
+//! `sshd_config.lockshell` template. This is the recommended path for any
+//! target you control (Docker container, lab box, your own Mac).
+//!
+//! `--self`: shortcut for the same-Mac case. Creates only the user signing
+//! key, prints the `authorized_keys` line, copies it to the clipboard via
+//! `pbcopy`, and skips the CA. Use when you just want to SSH into your own
+//! laptop and don't need cert-based auth.
 //!
 //! macOS-only in v0.6. The Linux fallback path lands in Phase 6.
 
@@ -18,31 +24,58 @@ pub fn run(args: SshInitArgs) -> Result<()> {
     use base64::Engine;
     use lockshell_ssh::{SecureEnclaveSigner, Signer};
 
-    let signer = SecureEnclaveSigner::load_or_create("lockshell-user")
-        .context("failed to load or create the Secure Enclave key")?;
-
-    // The signer's public_key_blob is the full SSH wire-format payload:
-    //   string("ecdsa-sha2-nistp256") || string("nistp256") || string(0x04 || X || Y)
-    // For an authorized_keys line we want the same blob, base64-encoded as a
-    // single field, prefixed by the algorithm name.
-    let blob = signer.public_key_blob()?;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&blob);
-    let host = host_label();
-    let line = format!("{} {} lockshell-user@{}", signer.algorithm(), b64, host);
-
-    println!("{}", line);
-
     if args.self_only {
+        // Same-Mac shortcut: just the user key + authorized_keys line.
+        let signer = SecureEnclaveSigner::load_or_create("lockshell-user")
+            .context("failed to load or create the Secure Enclave user key")?;
+        let blob = signer.public_key_blob()?;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&blob);
+        let host = host_label();
+        let line = format!("{} {} lockshell-user@{}", signer.algorithm(), b64, host);
+        println!("{}", line);
         eprintln!();
         eprintln!(
             "Add the line above to ~/.ssh/authorized_keys on the machine you want to SSH INTO."
         );
         eprintln!("Then run:  lockshell ssh add-host self <user>@localhost:22");
         eprintln!("And then:  lockshell ssh self");
-        // Best-effort clipboard copy. Failures are silent — the printed line is the
-        // source of truth.
         let _ = copy_to_clipboard(&line);
+        return Ok(());
     }
+
+    // Default mode: bootstrap CA + user key. Print the CA cert-authority line
+    // for distribution to managed targets.
+    let user = SecureEnclaveSigner::load_or_create("lockshell-user")
+        .context("failed to load or create the Secure Enclave user key")?;
+    let _ = user.public_key_blob()?; // touch it so the SE entry materialises
+
+    let ca = SecureEnclaveSigner::load_or_create("lockshell-ca")
+        .context("failed to load or create the Secure Enclave CA key")?;
+    let ca_blob = ca.public_key_blob()?;
+    let ca_b64 = base64::engine::general_purpose::STANDARD.encode(&ca_blob);
+    let host = host_label();
+
+    eprintln!("✓ user signing key ready (label: lockshell-user)");
+    eprintln!("✓ CA key ready          (label: lockshell-ca)");
+    eprintln!();
+    eprintln!("CA public key — distribute to managed targets:");
+    eprintln!();
+    println!("{} {} lockshell-ca@{}", ca.algorithm(), ca_b64, host);
+    eprintln!();
+    eprintln!("Per-target setup:");
+    eprintln!(
+        "  1. Save the line above to /etc/ssh/lockshell_ca.pub (without 'cert-authority' prefix)"
+    );
+    eprintln!("  2. Add to /etc/ssh/sshd_config:  TrustedUserCAKeys /etc/ssh/lockshell_ca.pub");
+    eprintln!(
+        "  3. Hardened reference template:  crates/lockshell-ssh/templates/sshd_config.lockshell"
+    );
+    eprintln!("  4. systemctl reload sshd  (or `launchctl kickstart -k system/com.openssh.sshd` on macOS)");
+    eprintln!();
+    eprintln!("Once the CA is trusted, every `lockshell ssh <alias>` mints a fresh 5-minute cert.");
+    eprintln!(
+        "Use `lockshell ssh init --self` instead if you only want same-Mac SSH without the CA."
+    );
     Ok(())
 }
 

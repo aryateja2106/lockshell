@@ -47,6 +47,18 @@ pub fn encode_mpint(out: &mut Vec<u8>, n: &[u8]) {
     out.extend_from_slice(trimmed);
 }
 
+/// Append a list of length-prefixed strings, then wrap the whole list as a
+/// single length-prefixed string. This matches the OpenSSH cert encoding for
+/// `valid principals` — an outer string field whose body is a sequence of
+/// length-prefixed string entries.
+pub fn encode_string_list(out: &mut Vec<u8>, items: &[&[u8]]) {
+    let mut body = Vec::new();
+    for item in items {
+        encode_string(&mut body, item);
+    }
+    encode_string(out, &body);
+}
+
 /// Decode a length-prefixed string from the head of `buf`.
 ///
 /// Returns `(value, rest)` where `rest` is the remainder of `buf` after the

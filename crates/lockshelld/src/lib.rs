@@ -6,3 +6,5 @@
 
 pub mod rpc;
 pub mod ssh_agent;
+
+pub use ssh_agent::{AgentBackend, CertMinter};

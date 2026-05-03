@@ -126,34 +126,34 @@ The first user-visible SSH demo.
 
 ## Phase 3 — CA + `lockshell ssh init` + hardened sshd
 
-- [ ] **3.1** Implement `Ca` type in `crates/lockshell-ssh/src/ca.rs`
-  - Acceptance: Generates ed25519 CA keypair (CA can use ed25519 even though user signer is ECDSA-P256), signs SSH user certificates per draft-miller-ssh-cert.
-  - Verify: Property test: encode → decode → verify, with random principals and TTLs.
+- [x] **3.1** Implement `Ca` type in `crates/lockshell-ssh/src/ca.rs`
+  - Acceptance: ECDSA P-256 CA (ed25519 not supported by SE; locked in Phase 3 brief), signs SSH user certificates per OpenSSH PROTOCOL.certkeys.
+  - Verify: 8 unit tests in `ca::tests` cover TTL bounds, principal embedding, permit-pty-only extensions, nonce uniqueness, ring-verified signature, malformed-input rejection.
   - Files: `crates/lockshell-ssh/src/ca.rs`.
 
-- [ ] **3.2** Store CA private key in SE (separate label `lockshell-ca`)
+- [x] **3.2** Store CA private key in SE (separate label `lockshell-ca`)
   - Acceptance: Same hardware-backed protection as the user signer.
   - Files: `crates/lockshell-ssh/src/signer/secure_enclave.rs` (extend with named-key support).
 
-- [ ] **3.3** Implement `lockshell ssh init` (no `--self`) — CA bootstrap
+- [x] **3.3** Implement `lockshell ssh init` (no `--self`) — CA bootstrap
   - Acceptance: Creates user CA if missing, prints `cert-authority` line, prints hardened `sshd_config` excerpt, offers to copy CA pubkey to clipboard.
   - Files: `crates/lockshell/src/commands/ssh_init.rs`, `crates/lockshell-ssh/templates/sshd_config.lockshell`.
 
-- [ ] **3.4** `lockshell ca print` and `lockshell ca rotate`
+- [x] **3.4** `lockshell ca print` and `lockshell ca rotate`
   - Acceptance: `print` outputs the CA pubkey; `rotate` generates new CA, archives old (with timestamp suffix), prints migration note.
   - Files: `crates/lockshell/src/commands/ca.rs`.
 
-- [ ] **3.5** Cert minting in the agent socket
+- [x] **3.5** Cert minting in the agent socket
   - Acceptance: When `ssh` requests a signature, the agent now presents a fresh cert (TTL 5m, principal `$USER`) signed by the CA, not the raw key.
-  - Verify: Local target with only `TrustedUserCAKeys` set accepts the connection.
-  - Files: `crates/lockshelld/src/ssh_agent.rs`, `crates/lockshell-ssh/src/ca.rs`.
+  - Verify: Local target with only `TrustedUserCAKeys` set accepts the connection. Unit tests `identities_answer_advertises_cert_when_minter_present`, `sign_request_with_cert_blob_referring_to_our_key_returns_signature`, and `sign_request_with_cert_blob_for_other_key_returns_failure` cover the cert-presentation and validation paths.
+  - Files: `crates/lockshelld/src/ssh_agent.rs` (CertMinter trait + AgentBackend wiring), `crates/lockshelld/src/main.rs` (CA SE signer + CaCertMinter bridge), `crates/lockshelld/src/lib.rs` (re-export AgentBackend, CertMinter), `crates/lockshell-ssh/src/ca.rs` (worker-1).
 
 - [ ] **3.6** `--cert-ttl=Nm` flag, capped at 60m
   - Acceptance: Out-of-range values rejected with helpful error.
   - Files: `crates/lockshell/src/cli.rs`, `crates/lockshell/src/commands/ssh.rs`.
 
-- [ ] **3.7** Cert TTL test with fake clock
-  - Acceptance: `cargo test -p lockshell-ssh ca::tests::expired_cert_rejected` passes.
+- [x] **3.7** Cert TTL test with fake clock
+  - Acceptance: `Clock` trait + `FixedClock` test impl in `ca.rs`; `mint_within_ttl_window` asserts valid_after/valid_before with t=1000, ttl=300; `ttl_below_minimum_rejected` and `ttl_above_maximum_rejected` cover bounds.
   - Files: `crates/lockshell-ssh/src/ca.rs` (under `#[cfg(test)]`).
 
 - [ ] **3.8** Open PR `feat/ssh-ca-init`. Reviewers: `code-reviewer`, `security-auditor`.

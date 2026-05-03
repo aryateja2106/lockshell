@@ -32,6 +32,7 @@ fn main() -> Result<()> {
         cli::Command::Ssh(c) => commands::ssh::run(c),
         cli::Command::SshInit(c) => commands::ssh_init::run(c),
         cli::Command::SshAddHost(c) => commands::ssh_host::add(c),
+        cli::Command::Ca(c) => commands::ca::run(c),
         cli::Command::Version => {
             println!(
                 "lockshell {} ({})",
