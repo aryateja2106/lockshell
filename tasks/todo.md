@@ -49,27 +49,27 @@ Behavior-neutral refactor. Land before any SSH work.
 
 API surface only. No real SSH yet.
 
-- [ ] **1.1** Create `crates/lockshell-proto/` with shared RPC types
+- [x] **1.1** Create `crates/lockshell-proto/` with shared RPC types
   - Acceptance: `Request`, `Response`, `Error`, `SessionStatus` defined; `serde::{Serialize,Deserialize}` derived; zero deps beyond `serde`.
   - Verify: `cargo build -p lockshell-proto`.
   - Files: `crates/lockshell-proto/Cargo.toml`, `crates/lockshell-proto/src/lib.rs`.
 
-- [ ] **1.2** Create `crates/lockshell-ssh/` scaffolding
+- [x] **1.2** Create `crates/lockshell-ssh/` scaffolding
   - Acceptance: Crate compiles; exposes `pub trait Signer` with `algorithm()`, `public_key_blob()`, `sign(data, reason)`; `pub mod wire` with SSH wire-format helpers (length-prefixed strings, mpints).
   - Verify: `cargo test -p lockshell-ssh` (wire format unit tests pass).
   - Files: `crates/lockshell-ssh/Cargo.toml`, `crates/lockshell-ssh/src/lib.rs`, `crates/lockshell-ssh/src/signer/mod.rs`, `crates/lockshell-ssh/src/wire.rs`.
 
-- [ ] **1.3** Create `crates/lockshelld/` scaffolding
+- [x] **1.3** Create `crates/lockshelld/` scaffolding
   - Acceptance: Binary `lockshelld` boots, listens on `~/.lockshell/control.sock`, answers `vault.status` with a stub.
   - Verify: `cargo run -p lockshelld -- --foreground &` then `nc -U ~/.lockshell/control.sock` and send `{"jsonrpc":"2.0","id":1,"method":"vault.status"}` returns valid JSON.
   - Files: `crates/lockshelld/Cargo.toml`, `crates/lockshelld/src/main.rs`, `crates/lockshelld/src/rpc.rs`.
 
-- [ ] **1.4** Add license header check to CI
+- [x] **1.4** Add license header check to CI
   - Acceptance: `scripts/check_license.sh` greps every `.rs` for `// SPDX-License-Identifier: Apache-2.0` and exits non-zero on miss.
   - Verify: Intentionally remove a header, CI fails. Restore, CI passes.
   - Files: `scripts/check_license.sh`, `.github/workflows/ci.yml`.
 
-- [ ] **1.5** Add `cargo deny` config
+- [x] **1.5** Add `cargo deny` config
   - Acceptance: `cargo deny check` rejects BSL, GPL-3 (without classpath exception), AGPL.
   - Verify: Add a fake BSL dep, CI fails. Remove, CI passes.
   - Files: `deny.toml`, `.github/workflows/ci.yml`.

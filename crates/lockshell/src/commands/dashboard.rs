@@ -118,7 +118,9 @@ fn render(
             .join("\n")
     };
 
-    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+    let now = chrono::Utc::now()
+        .format("%Y-%m-%d %H:%M:%S UTC")
+        .to_string();
     let version = env!("CARGO_PKG_VERSION");
 
     format!(

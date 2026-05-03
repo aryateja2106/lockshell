@@ -7,7 +7,10 @@ use anyhow::Result;
 
 pub fn run(args: RegisterArgs) -> Result<()> {
     if !is_valid_env_name(&args.env_name) {
-        ui::err(&format!("invalid env name '{}'. Must match [A-Z_][A-Z0-9_]*", args.env_name));
+        ui::err(&format!(
+            "invalid env name '{}'. Must match [A-Z_][A-Z0-9_]*",
+            args.env_name
+        ));
         std::process::exit(2);
     }
     registry::upsert(&args.env_name, &args.vault_id, &args.field)?;

@@ -49,8 +49,7 @@ pub fn load() -> Result<Vec<Mapping>> {
     if !path.exists() {
         return Ok(vec![]);
     }
-    let raw = fs::read_to_string(&path)
-        .with_context(|| format!("reading {}", path.display()))?;
+    let raw = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     let mut out = Vec::new();
     for (n, line) in raw.lines().enumerate() {
         if line.trim().is_empty() || line.starts_with('#') {
@@ -58,7 +57,10 @@ pub fn load() -> Result<Vec<Mapping>> {
         }
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() != 3 {
-            anyhow::bail!("registry line {} malformed (expected 3 tab-separated fields)", n + 1);
+            anyhow::bail!(
+                "registry line {} malformed (expected 3 tab-separated fields)",
+                n + 1
+            );
         }
         out.push(Mapping {
             env_name: parts[0].into(),
@@ -89,13 +91,25 @@ pub fn save(entries: &[Mapping]) -> Result<()> {
 
 pub fn upsert(env_name: &str, vault_id: &str, field: &str) -> Result<()> {
     if env_name.len() > MAX_ENV_NAME_LEN {
-        anyhow::bail!("env_name too long ({} chars; max {})", env_name.len(), MAX_ENV_NAME_LEN);
+        anyhow::bail!(
+            "env_name too long ({} chars; max {})",
+            env_name.len(),
+            MAX_ENV_NAME_LEN
+        );
     }
     if vault_id.len() > MAX_VAULT_ID_LEN {
-        anyhow::bail!("vault_id too long ({} chars; max {})", vault_id.len(), MAX_VAULT_ID_LEN);
+        anyhow::bail!(
+            "vault_id too long ({} chars; max {})",
+            vault_id.len(),
+            MAX_VAULT_ID_LEN
+        );
     }
     if field.len() > MAX_FIELD_LEN {
-        anyhow::bail!("field too long ({} chars; max {})", field.len(), MAX_FIELD_LEN);
+        anyhow::bail!(
+            "field too long ({} chars; max {})",
+            field.len(),
+            MAX_FIELD_LEN
+        );
     }
     let mut entries = load()?;
     entries.retain(|m| m.env_name != env_name);

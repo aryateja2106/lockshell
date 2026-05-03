@@ -30,7 +30,9 @@ pub enum VaultError {
 
 impl AgentPasswordVault {
     pub fn check_installed() -> Result<()> {
-        which::which("agent-password").map(|_| ()).map_err(|_| VaultError::BinaryMissing.into())
+        which::which("agent-password")
+            .map(|_| ())
+            .map_err(|_| VaultError::BinaryMissing.into())
     }
 
     pub fn session_status() -> Result<SessionStatus> {
@@ -50,18 +52,29 @@ impl AgentPasswordVault {
             return Err(VaultError::Other(
                 "agent-password daemon is not running and could not be started \
                  (likely sandbox restriction or session was closed). Run \
-                 `agent-password session create` from an unsandboxed shell.".into()
+                 `agent-password session create` from an unsandboxed shell."
+                    .into(),
             )
             .into());
         }
 
         if combined.contains("no shared session") {
-            return Ok(SessionStatus { exists: false, unlocked: false, approved: vec![], pending_requests: 0 });
+            return Ok(SessionStatus {
+                exists: false,
+                unlocked: false,
+                approved: vec![],
+                pending_requests: 0,
+            });
         }
 
         // Parse the human-readable output. Default to exists=false; only flip to true
         // when we see explicit `exists: true` output.
-        let mut status = SessionStatus { exists: false, unlocked: false, approved: vec![], pending_requests: 0 };
+        let mut status = SessionStatus {
+            exists: false,
+            unlocked: false,
+            approved: vec![],
+            pending_requests: 0,
+        };
         for line in text.lines() {
             let line = line.trim();
             if let Some(rest) = line.strip_prefix("exists:") {
@@ -75,7 +88,11 @@ impl AgentPasswordVault {
                 }
             } else if let Some(rest) = line.strip_prefix("pending requests:") {
                 let r = rest.trim();
-                status.pending_requests = if r == "<none>" { 0 } else { r.parse().unwrap_or(0) };
+                status.pending_requests = if r == "<none>" {
+                    0
+                } else {
+                    r.parse().unwrap_or(0)
+                };
             }
         }
         Ok(status)
@@ -107,7 +124,8 @@ impl AgentPasswordVault {
         let stdout = String::from_utf8_lossy(&out.stdout);
         let v: Value = serde_json::from_str(&stdout)
             .with_context(|| format!("parsing agent-password JSON: {}", stdout))?;
-        let val = v.get(field)
+        let val = v
+            .get(field)
             .and_then(|x| x.as_str())
             .ok_or_else(|| anyhow!("field '{}' missing from vault response", field))?;
         Ok(val.to_string())
@@ -117,25 +135,36 @@ impl AgentPasswordVault {
     pub fn request(vault_id: &str, requester: &str, reason: &str) -> Result<u32> {
         Self::check_installed()?;
         let out = Command::new("agent-password")
-            .args(["secrets", "request", vault_id, "--requester", requester, "--reason", reason])
+            .args([
+                "secrets",
+                "request",
+                vault_id,
+                "--requester",
+                requester,
+                "--reason",
+                reason,
+            ])
             .output()
             .context("running agent-password secrets request")?;
         if !out.status.success() {
             let patterns = crate::redact::load_patterns().unwrap_or_default();
-            let redacted = crate::redact::redact(
-                String::from_utf8_lossy(&out.stderr).trim(),
-                &patterns,
-            );
+            let redacted =
+                crate::redact::redact(String::from_utf8_lossy(&out.stderr).trim(), &patterns);
             return Err(VaultError::Other(redacted).into());
         }
         let stdout = String::from_utf8_lossy(&out.stdout);
         for line in stdout.lines() {
             if let Some(num) = line.strip_prefix("created request ") {
-                return num.trim().parse::<u32>()
+                return num
+                    .trim()
+                    .parse::<u32>()
                     .with_context(|| format!("parsing request id from '{}'", line));
             }
         }
-        Err(anyhow!("could not parse request id from agent-password output: {}", stdout))
+        Err(anyhow!(
+            "could not parse request id from agent-password output: {}",
+            stdout
+        ))
     }
 }
 

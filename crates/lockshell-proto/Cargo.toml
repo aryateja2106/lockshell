@@ -1,0 +1,12 @@
+[package]
+name = "lockshell-proto"
+version = "0.1.0"
+edition = "2021"
+authors = ["Arya Teja Rudraraju <aryayt55@gmail.com>"]
+license = "Apache-2.0"
+description = "Shared RPC types for lockshell CLI, daemon, and TUI."
+repository = "https://github.com/aryateja2106/lockshell"
+rust-version = "1.74"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }

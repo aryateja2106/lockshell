@@ -22,7 +22,9 @@ pub fn run(args: SetupArgs) -> Result<()> {
 
     // Step 2: vault init?
     let home = std::env::var("HOME").unwrap_or_default();
-    let vault_db = std::path::Path::new(&home).join(".agent-password").join("vault.db");
+    let vault_db = std::path::Path::new(&home)
+        .join(".agent-password")
+        .join("vault.db");
     if !vault_db.exists() {
         ui::warn("vault not initialised yet");
         ui::info("Run this in your terminal (interactive, may prompt for keychain):");
@@ -34,13 +36,17 @@ pub fn run(args: SetupArgs) -> Result<()> {
             let mut buf = String::new();
             std::io::stdin().read_line(&mut buf)?;
             if buf.trim().eq_ignore_ascii_case("y") {
-                let s = Command::new("agent-password").args(["vault", "init"]).status()?;
+                let s = Command::new("agent-password")
+                    .args(["vault", "init"])
+                    .status()?;
                 if !s.success() {
                     ui::err("vault init failed; check the error above");
                     return Ok(());
                 }
             } else {
-                ui::info("Skipping vault init. Re-run `lockshell setup` after running it manually.");
+                ui::info(
+                    "Skipping vault init. Re-run `lockshell setup` after running it manually.",
+                );
                 return Ok(());
             }
         }
@@ -49,7 +55,9 @@ pub fn run(args: SetupArgs) -> Result<()> {
     }
 
     // Step 3: session
-    let session_out = Command::new("agent-password").args(["session", "status"]).output()?;
+    let session_out = Command::new("agent-password")
+        .args(["session", "status"])
+        .output()?;
     let session_text = String::from_utf8_lossy(&session_out.stdout);
     if !session_text.contains("exists: true") {
         ui::warn("no active session");
@@ -61,7 +69,9 @@ pub fn run(args: SetupArgs) -> Result<()> {
             let mut buf = String::new();
             std::io::stdin().read_line(&mut buf)?;
             if buf.trim().eq_ignore_ascii_case("y") {
-                Command::new("agent-password").args(["session", "create"]).status()?;
+                Command::new("agent-password")
+                    .args(["session", "create"])
+                    .status()?;
             }
         }
     } else {

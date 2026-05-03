@@ -32,7 +32,8 @@ pub fn run(args: StatusArgs) -> Result<()> {
         return Ok(());
     }
 
-    ui::info(&format!("registry: {} ({} mapping{})",
+    ui::info(&format!(
+        "registry: {} ({} mapping{})",
         registry::registry_path().display(),
         mappings.len(),
         if mappings.len() == 1 { "" } else { "s" }
@@ -40,17 +41,21 @@ pub fn run(args: StatusArgs) -> Result<()> {
 
     match session {
         Some(s) if s.exists => {
-            ui::ok(&format!("session: exists={}, unlocked={}, approved=[{}], pending={}",
-                s.exists, s.unlocked,
+            ui::ok(&format!(
+                "session: exists={}, unlocked={}, approved=[{}], pending={}",
+                s.exists,
+                s.unlocked,
                 s.approved.join(","),
-                s.pending_requests));
+                s.pending_requests
+            ));
         }
         Some(_) => {
             ui::warn("session: not active. Run: agent-password session create");
         }
         None => {
             // Surface the actual error rather than a generic message.
-            let err = session_result.err()
+            let err = session_result
+                .err()
                 .map(|e| e.to_string())
                 .unwrap_or_else(|| "unknown".into());
             ui::err(&format!("session: {}", err));

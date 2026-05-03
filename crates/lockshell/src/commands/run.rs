@@ -45,11 +45,13 @@ pub fn run(args: RunArgs) -> Result<()> {
     // we cannot zero those, but we can at least clean up our own copies.
     let mut resolved: Vec<(String, Zeroizing<String>)> = Vec::new();
     for ph in &placeholders {
-        let mapping = registry::lookup(ph)?
-            .ok_or_else(|| anyhow::anyhow!(
+        let mapping = registry::lookup(ph)?.ok_or_else(|| {
+            anyhow::anyhow!(
                 "{} is not registered. Run: lockshell register {} <vault-id> <field>",
-                ph, ph
-            ))?;
+                ph,
+                ph
+            )
+        })?;
         match AgentPasswordVault::get_field(&mapping.vault_id, &mapping.field) {
             Ok(val) => resolved.push((ph.clone(), Zeroizing::new(val))),
             Err(e) => {
@@ -58,8 +60,10 @@ pub fn run(args: RunArgs) -> Result<()> {
                         "{} is in the vault but not approved for this session.",
                         ph
                     ));
-                    ui::hint(&format!("agent-password secrets request {} --requester $(whoami) --reason {:?}",
-                        mapping.vault_id, args.reason));
+                    ui::hint(&format!(
+                        "agent-password secrets request {} --requester $(whoami) --reason {:?}",
+                        mapping.vault_id, args.reason
+                    ));
                     ui::hint("agent-password requests list");
                     ui::hint("agent-password requests approve <id> all");
                     std::process::exit(3);
@@ -72,10 +76,16 @@ pub fn run(args: RunArgs) -> Result<()> {
                 if let Some(VaultError::Other(msg)) = e.downcast_ref::<VaultError>() {
                     if msg.contains("internal daemon did not become ready") {
                         ui::err("agent-password daemon is not running and could not be started.");
-                        ui::hint("This usually means: (a) you closed the session and the user must run");
-                        ui::hint("   `agent-password session create` from their unsandboxed shell, OR");
+                        ui::hint(
+                            "This usually means: (a) you closed the session and the user must run",
+                        );
+                        ui::hint(
+                            "   `agent-password session create` from their unsandboxed shell, OR",
+                        );
                         ui::hint("(b) the sandbox blocks Unix socket creation at ~/.agent-password/daemon.sock.");
-                        ui::hint("Sandboxed agents cannot start the daemon themselves; ask the user.");
+                        ui::hint(
+                            "Sandboxed agents cannot start the daemon themselves; ask the user.",
+                        );
                         std::process::exit(4);
                     }
                 }
@@ -126,8 +136,16 @@ pub fn run(args: RunArgs) -> Result<()> {
         redact::load_patterns()?
     };
 
-    let stdout_clean = if no_redact_allowed { stdout } else { redact::redact(&stdout, &patterns) };
-    let stderr_clean = if no_redact_allowed { stderr } else { redact::redact(&stderr, &patterns) };
+    let stdout_clean = if no_redact_allowed {
+        stdout
+    } else {
+        redact::redact(&stdout, &patterns)
+    };
+    let stderr_clean = if no_redact_allowed {
+        stderr
+    } else {
+        redact::redact(&stderr, &patterns)
+    };
 
     print!("{}", stdout_clean);
     if !stderr_clean.is_empty() {

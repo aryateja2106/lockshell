@@ -26,10 +26,14 @@ pub fn run(_args: DoctorArgs) -> Result<()> {
     }
 
     // 2. vault initialised
-    let vault_dir = std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".agent-password"))
+    let vault_dir = std::env::var("HOME")
+        .map(|h| std::path::PathBuf::from(h).join(".agent-password"))
         .unwrap_or_default();
     if vault_dir.join("vault.db").exists() {
-        ui::ok(&format!("vault file exists at {}", vault_dir.join("vault.db").display()));
+        ui::ok(&format!(
+            "vault file exists at {}",
+            vault_dir.join("vault.db").display()
+        ));
     } else {
         ui::err("vault not initialised");
         ui::hint("agent-password vault init");
@@ -37,7 +41,10 @@ pub fn run(_args: DoctorArgs) -> Result<()> {
     }
 
     // 3. session
-    if let Ok(out) = Command::new("agent-password").args(["session", "status"]).output() {
+    if let Ok(out) = Command::new("agent-password")
+        .args(["session", "status"])
+        .output()
+    {
         let stdout = String::from_utf8_lossy(&out.stdout);
         let stderr = String::from_utf8_lossy(&out.stderr);
         let combined = format!("{}\n{}", stdout, stderr);
@@ -64,12 +71,18 @@ pub fn run(_args: DoctorArgs) -> Result<()> {
     if cfg.exists() {
         ui::ok(&format!("config dir at {}", cfg.display()));
     } else {
-        ui::warn(&format!("config dir does not exist (will be created on first use): {}", cfg.display()));
+        ui::warn(&format!(
+            "config dir does not exist (will be created on first use): {}",
+            cfg.display()
+        ));
     }
 
     // Probe audit log writability by attempting a no-op append.
     match audit_log::append("doctor:writability-probe", "echo ok", &[]) {
-        Ok(true) => ui::ok(&format!("audit log writable at {}", audit_log::audit_path().display())),
+        Ok(true) => ui::ok(&format!(
+            "audit log writable at {}",
+            audit_log::audit_path().display()
+        )),
         Ok(false) | Err(_) => {
             ui::warn(&format!(
                 "audit log not writable at {}",

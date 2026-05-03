@@ -51,7 +51,10 @@ pub fn load_patterns() -> Result<Vec<Regex>> {
         }
         match Regex::new(trimmed) {
             Ok(r) => patterns.push(r),
-            Err(e) => eprintln!("lockshell: skipping invalid redactor pattern '{}': {}", trimmed, e),
+            Err(e) => eprintln!(
+                "lockshell: skipping invalid redactor pattern '{}': {}",
+                trimmed, e
+            ),
         }
     }
     Ok(patterns)
