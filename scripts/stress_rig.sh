@@ -146,6 +146,15 @@ echo "✓ aliases registered"
 
 step "6/7  Stress run: $OPS ops, parallelism=$PARALLEL"
 
+# Snapshot the audit log size before the run so we can assert that every
+# successful op produced an audit row. The log lives at the shared path
+# `~/.config/lockshell/audit.log` (TSV, append-only, one row per op).
+AUDIT_LOG="$HOME/.config/lockshell/audit.log"
+AUDIT_BEFORE=0
+if [[ -f "$AUDIT_LOG" ]]; then
+  AUDIT_BEFORE=$(wc -l < "$AUDIT_LOG" | tr -d ' ')
+fi
+
 run_one() {
   local idx=$1
   local target="self-$(((idx % 5) + 1))"
@@ -177,6 +186,12 @@ seq 1 "$OPS" | xargs -n 1 -P "$PARALLEL" -I {} bash -c 'run_one "$@"' _ {}
 END_NS=$(perl -MTime::HiRes=time -e 'printf("%d", time()*1000000000)')
 TOTAL_MS=$(( (END_NS - START_NS) / 1000000 ))
 
+AUDIT_AFTER=0
+if [[ -f "$AUDIT_LOG" ]]; then
+  AUDIT_AFTER=$(wc -l < "$AUDIT_LOG" | tr -d ' ')
+fi
+AUDIT_DELTA=$(( AUDIT_AFTER - AUDIT_BEFORE ))
+
 EXAMPLE_OUT=""
 for i in $(seq 1 "$OPS"); do
   if [[ -s "$WORK/op-$i.out" ]]; then
@@ -188,12 +203,13 @@ done
 step "7/7  Compute stats + write proof"
 
 python3 - "$LATENCIES" "$OPS" "$PARALLEL" "$TOTAL_MS" "$PROOF" "$EXAMPLE_OUT" \
-        "$ROOT" "$DAEMON_LOG" "$TRANSCRIPT" <<'PY'
+        "$ROOT" "$DAEMON_LOG" "$TRANSCRIPT" "$AUDIT_DELTA" <<'PY'
 import os, sys, statistics, datetime, subprocess, pathlib
 
 (_, lat_path, ops, parallel, total_ms, proof_path,
- example, root, daemon_log, transcript) = sys.argv
+ example, root, daemon_log, transcript, audit_delta) = sys.argv
 ops = int(ops); parallel = int(parallel); total_ms = int(total_ms)
+audit_delta = int(audit_delta)
 
 oks, fails = [], []
 per_target = {}
@@ -255,7 +271,12 @@ with open(proof_path, 'w') as out:
     out.write(f"- **Success rate:**  {len(oks)}/{ops}  ({succ_rate:.2f}%)\n")
     out.write(f"- **Failures:**      {len(fails)}\n")
     out.write(f"- **Wall time:**     {total_ms} ms ({total_ms/1000:.2f} s)\n")
-    out.write(f"- **Throughput:**    {qps:.2f} ops/s sustained\n\n")
+    out.write(f"- **Throughput:**    {qps:.2f} ops/s sustained\n")
+    audit_marker = "✅" if audit_delta == ops else "⚠️"
+    out.write(
+        f"- **Audit rows:**    {audit_delta} new rows in `~/.config/lockshell/audit.log` "
+        f"(expected {ops}) {audit_marker}\n\n"
+    )
 
     if oks:
         out.write("### Latency (per-op, ms) — successful operations\n\n")
