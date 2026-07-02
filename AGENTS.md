@@ -1,25 +1,25 @@
 # AGENTS.md — lockshell
 
-If you are an AI coding agent (Claude Code, Codex, Cursor, pi, Copilot, etc.) and you found this file, read it once. It tells you everything you need to use lockshell correctly, in order.
+If AI coding agent (Claude Code, Codex, Cursor, pi, Copilot, etc.) found this file, read once. Tell everything need to use lockshell correctly, in order.
 
 ## What lockshell is, in one paragraph
 
-`lockshell` is a CLI on the user's machine that brokers secret values for you. You produce a command **template** with `{{PLACEHOLDER}}` names. You pass that template to `lockshell run`. Lockshell resolves placeholders against a local encrypted vault, runs the command in a subprocess with secrets in env (never argv), pipes output through a regex redactor, and returns the redacted result. **You never see the secret value.** The user never has to paste it in chat. This is the pattern.
+`lockshell` = CLI on user machine that brokers secret values for you. You produce command **template** with `{{PLACEHOLDER}}` names. Pass template to `lockshell run`. Lockshell resolves placeholders against local encrypted vault, runs command in subprocess with secrets in env (never argv), pipes output through regex redactor, returns redacted result. **You never see secret value.** User never paste in chat. This pattern.
 
 ## When to use lockshell
 
 ALWAYS, when:
 
-- You need to call any API that requires authentication (`Authorization` header, query param, `--token` flag)
-- You need to run a CLI tool that reads a secret from env (`LINEAR_TOKEN`, `OPENAI_API_KEY`, `GITHUB_TOKEN`, `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, etc.)
-- You need to reach a database with a password
-- You need to sign anything with a private key
+- Need to call any API requiring authentication (`Authorization` header, query param, `--token` flag)
+- Need to run CLI tool reading secret from env (`LINEAR_TOKEN`, `OPENAI_API_KEY`, `GITHUB_TOKEN`, `SUPABASE_ACCESS_TOKEN`, `CLOUDFLARE_API_TOKEN`, etc.)
+- Need to reach database with password
+- Need to sign anything with private key
 
 NEVER:
 
-- Ask the user to paste the value of a secret into chat
-- Write a secret value into any file the agent can see
-- Echo a secret to stdout deliberately (the redactor is a safety net, not the plan)
+- Ask user to paste secret value into chat
+- Write secret value into any file agent can see
+- Echo secret to stdout deliberately (redactor = safety net, not plan)
 
 ## The contract
 
@@ -28,21 +28,21 @@ You write:
 '<some command> --token "{{LINEAR_API_KEY}}"'
 ```
 
-You hand that string to:
+Hand string to:
 ```
 lockshell run --reason "<short human-readable reason>" -- '<that command>'
 ```
 
-You receive:
-- stdout: the tool's output, with known token formats redacted
+Receive:
+- stdout: tool output, known token formats redacted
 - stderr: same treatment
-- exit code: the subprocess's exit code
+- exit code: subprocess exit code
 
-You do NOT receive: the value of any `{{PLACEHOLDER}}`.
+Do NOT receive: value of any `{{PLACEHOLDER}}`.
 
 ## First-time-on-this-machine flow (do once per session)
 
-Run these checks, in order:
+Run checks, in order:
 
 ```bash
 # 1. Is lockshell on PATH?
@@ -58,7 +58,7 @@ lockshell list
 lockshell status
 ```
 
-`doctor` exits non-zero on actionable problems. Read the output and run the printed commands.
+`doctor` exits non-zero on actionable problems. Read output, run printed commands.
 
 Exit codes:
 - 0 — ready to broker
@@ -67,15 +67,15 @@ Exit codes:
 
 Most common gaps:
 
-- `agent-password vault init` — brand-new install only. The user does this once with Touch ID. You cannot.
-- `agent-password session create` — once per shell session, by the user from an unsandboxed shell. Sandboxed agents cannot bind the daemon socket and will see "internal daemon did not become ready".
+- `agent-password vault init` — brand-new install only. User does once with Touch ID. You cannot.
+- `agent-password session create` — once per shell session, by user from unsandboxed shell. Sandboxed agents cannot bind daemon socket, will see "internal daemon did not become ready".
 - `agent-password secrets request <id> --requester <you> --reason "..."` then `agent-password requests approve <N> all` — once per session per secret.
 
 ## Sandboxed agents (Codex `workspace-write`, similar)
 
-If your sandbox restricts writes to `~/.config/`, lockshell's audit log location may not be writable. Two options:
+If sandbox restricts writes to `~/.config/`, lockshell audit log location may not be writable. Two options:
 
-- **Set `LOCKSHELL_CONFIG_DIR`** to a directory you can write (e.g. `$TMPDIR/lockshell`). Copy the existing registry over once:
+- **Set `LOCKSHELL_CONFIG_DIR`** to directory you can write (e.g. `$TMPDIR/lockshell`). Copy existing registry over once:
 
   ```bash
   export LOCKSHELL_CONFIG_DIR="${TMPDIR%/}/lockshell"
@@ -84,13 +84,13 @@ If your sandbox restricts writes to `~/.config/`, lockshell's audit log location
   cp -n ~/.config/lockshell/redactors.txt "$LOCKSHELL_CONFIG_DIR/" 2>/dev/null || true
   ```
 
-- **Or accept best-effort auditing.** v0.1 lockshell warns when the audit log can't be written but still runs the command. The cloud-leak prevention does not depend on the audit log; it depends on env-only secret injection.
+- **Or accept best-effort auditing.** v0.1 lockshell warns when audit log can't be written but still runs command. Cloud-leak prevention does not depend on audit log; depends on env-only secret injection.
 
-If your sandbox blocks Unix socket creation under `~/.agent-password/`, you cannot start the daemon. Ask the user to run `agent-password session create` in their normal shell. The daemon then becomes reachable to your sandbox via the existing socket file (read-only access is sufficient for most agent operations).
+If sandbox blocks Unix socket creation under `~/.agent-password/`, cannot start daemon. Ask user to run `agent-password session create` in normal shell. Daemon then reachable to sandbox via existing socket file (read-only access sufficient for most agent operations).
 
 ## When `lockshell run` fails with "not approved"
 
-You will see something like:
+Will see something like:
 
 ```
 ✗ LINEAR_API_KEY is in the vault but not approved for this session.
@@ -99,7 +99,7 @@ You will see something like:
   agent-password requests approve <id> all
 ```
 
-Run those three commands, in that order, *as printed*. The third one fires Touch ID for the user. Then re-run your original `lockshell run` line.
+Run those three commands, in that order, *as printed*. Third fires Touch ID for user. Then re-run original `lockshell run` line.
 
 ## When the placeholder is not registered
 
@@ -108,35 +108,35 @@ Run those three commands, in that order, *as printed*. The third one fires Touch
   Run: lockshell register LINEAR_API_KEY <vault-id> <field>
 ```
 
-You need two things from the user:
-- The **vault id** (a name like `linear-api`)
-- The **field** within that vault entry (typically `password` for `login add` style entries, `token` for `secret put --type api_key`)
+Need two things from user:
+- **vault id** (name like `linear-api`)
+- **field** within vault entry (typically `password` for `login add` style entries, `token` for `secret put --type api_key`)
 
-If neither exists, the user hasn't added the secret yet. Tell them to add it via `agent-password login add ... --password-stdin` (the value is piped in via stdin so it never appears on argv or in chat). Do NOT propose the user paste the value into the conversation.
+If neither exists, user hasn't added secret yet. Tell them to add via `agent-password login add ... --password-stdin` (value piped via stdin so never appears on argv or in chat). Do NOT propose user paste value into conversation.
 
 ## Persistence across sessions
 
-The **registry** (`~/.config/lockshell/registry.tsv`) persists. Once a placeholder is registered, every future agent on this machine sees it via `lockshell list`. You do not re-register.
+**Registry** (`~/.config/lockshell/registry.tsv`) persists. Once placeholder registered, every future agent on machine sees via `lockshell list`. Do not re-register.
 
-The **vault** persists. Once a secret is in the vault, it stays.
+**Vault** persists. Once secret in vault, stays.
 
-The **session unlock + per-secret approval** does NOT persist across `agent-password session close` or reboots. That is intentional — the user re-asserts presence by approving each session. If you (the agent) come into a fresh session and need a secret, follow the "When `lockshell run` fails with not approved" flow above.
+**Session unlock + per-secret approval** does NOT persist across `agent-password session close` or reboots. Intentional — user re-asserts presence by approving each session. If you (agent) come into fresh session and need secret, follow "When `lockshell run` fails with not approved" flow above.
 
 ## Discovering what API to call
 
-`lockshell` does not know how to call APIs. That is your job. `lockshell` only handles the secret. For example:
+`lockshell` does not know how to call APIs. Your job. `lockshell` only handles secret. Examples:
 
 - Linear GraphQL → `https://api.linear.app/graphql`, header `Authorization: <token>`
 - GitHub REST → `https://api.github.com`, header `Authorization: Bearer <token>`
 - Vercel → `https://api.vercel.com`, header `Authorization: Bearer <token>`
-- Supabase → `https://api.supabase.com` for the platform CLI; project-specific for data
+- Supabase → `https://api.supabase.com` for platform CLI; project-specific for data
 - OpenAI → `https://api.openai.com/v1`, header `Authorization: Bearer <token>`
 
-Look up the actual API in the provider's docs, then write the curl/CLI invocation with `{{PLACEHOLDER}}` for the secret.
+Look up actual API in provider docs, then write curl/CLI invocation with `{{PLACEHOLDER}}` for secret.
 
 ## Reasoning text in `--reason`
 
-You will write the reason. Make it short and specific so the user, looking at the audit log next month, knows why a secret was used. Good reasons:
+You write reason. Short and specific so user, looking at audit log next month, knows why secret was used. Good reasons:
 
 - `"fetch viewer info from linear"`
 - `"deploy aryateja.com to vercel preview"`
@@ -150,30 +150,30 @@ Bad reasons:
 
 ## What you should NEVER do
 
-1. Write the literal value of a secret into a `lockshell run` command. Use `{{PLACEHOLDER}}`.
-2. Ask the user to paste a secret value in chat.
-3. Use `lockshell run --no-redact` unless explicitly debugging with the user's permission.
-4. Call `agent-password secret put` with the value as a CLI arg. Always pipe via stdin.
-5. Suggest the user add the secret to a `.env` file (use the vault).
+1. Write literal value of secret into `lockshell run` command. Use `{{PLACEHOLDER}}`.
+2. Ask user to paste secret value in chat.
+3. Use `lockshell run --no-redact` unless explicitly debugging with user permission.
+4. Call `agent-password secret put` with value as CLI arg. Always pipe via stdin.
+5. Suggest user add secret to `.env` file (use vault).
 
 ## Self-check before you write a command
 
 Ask yourself:
 
-- [ ] Did I use `{{PLACEHOLDER}}` instead of a literal secret?
-- [ ] Did I pass `--reason` with a specific, human-readable string?
-- [ ] If the secret was just added, did I run the request → approve flow?
-- [ ] Did I check `lockshell list` to confirm the placeholder is registered?
-- [ ] If the placeholder is missing, did I tell the user how to add it without pasting the value in chat?
+- [ ] Did I use `{{PLACEHOLDER}}` instead of literal secret?
+- [ ] Did I pass `--reason` with specific, human-readable string?
+- [ ] If secret just added, did I run request → approve flow?
+- [ ] Did I check `lockshell list` to confirm placeholder registered?
+- [ ] If placeholder missing, did I tell user how to add without pasting value in chat?
 
-If all five are yes, you are using lockshell correctly.
+If all five yes, using lockshell correctly.
 
 ## Where to read more
 
-- `README.md` for the human pitch
+- `README.md` for human pitch
 - `docs/THREAT_MODEL.md` for what lockshell defends against
-- `docs/ARCHITECTURE.md` for the v0.1 → v0.3 plan
-- `examples/linear-graphql.md` for a worked example
+- `docs/ARCHITECTURE.md` for v0.1 → v0.3 plan
+- `examples/linear-graphql.md` for worked example
 
 
 <claude-mem-context>
