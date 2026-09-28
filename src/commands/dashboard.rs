@@ -293,7 +293,7 @@ fn truncate(s: &str, n: usize) -> String {
         s.to_string()
     } else {
         let mut t = s.chars().take(n).collect::<String>();
-        t.push_str("…");
+        t.push('…');
         t
     }
 }

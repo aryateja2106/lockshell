@@ -245,6 +245,26 @@ fn mask_value(masker: &mask::Masker, map: &mut mask::Mapping, v: &mut Value) {
     }
 }
 
+/// Replace every occurrence of a secret the gateway itself knows (the local client
+/// token and every loaded provider key) with a fixed marker, whatever the provider.
+/// An agent that read one of these by mistake (or was tricked into it) cannot pass it
+/// upstream. Unlike masking, this is never reversed in the reply.
+fn scrub_secrets(secrets: &[&str], v: &mut Value, scrubbed: &mut usize) {
+    if let Some(s) = v.as_str() {
+        let mut out = s.to_string();
+        for sec in secrets.iter().filter(|x| x.len() >= 8) {
+            let n = out.matches(sec).count();
+            if n > 0 {
+                *scrubbed += n;
+                out = out.replace(sec, "[SECRET_REDACTED]");
+            }
+        }
+        if out != s {
+            *v = json!(out);
+        }
+    }
+}
+
 fn unmask_value(map: &mask::Mapping, v: &mut Value) {
     if let Some(s) = v.as_str() {
         *v = json!(mask::Masker::unmask(s, map));
@@ -323,10 +343,20 @@ fn handle(state: Arc<State>, mut rq: Request) {
         Err(e) => return err(rq, 500, &format!("masker failed to load: {e}")),
     };
     let mut map = mask::Mapping::default();
+    let mut scrubbed = 0usize;
+    let secrets: Vec<&str> = std::iter::once(state.token.as_str())
+        .chain(state.keys.values().map(|k| k.as_str()))
+        .collect();
     if let Some(msgs) = req["messages"].as_array_mut() {
         for msg in msgs {
             if msg["content"].is_array() {
                 return err(rq, 400, "only plain-text message content is allowed");
+            }
+            scrub_secrets(&secrets, &mut msg["content"], &mut scrubbed);
+            if let Some(tcs) = msg["tool_calls"].as_array_mut() {
+                for tc in tcs {
+                    scrub_secrets(&secrets, &mut tc["function"]["arguments"], &mut scrubbed);
+                }
             }
             if pc.mask {
                 mask_value(&masker, &mut map, &mut msg["content"]);
@@ -382,7 +412,7 @@ fn handle(state: Arc<State>, mut rq: Request) {
 
     audit(json!({
         "provider": provider, "model": model, "status": status,
-        "sent_sha": short_sha(&outgoing), "masked": map.counts(),
+        "sent_sha": short_sha(&outgoing), "masked": map.counts(), "secrets_scrubbed": scrubbed,
         "prompt_tokens": resp["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
         "total_tokens": resp["usage"]["total_tokens"].as_u64().unwrap_or(0),
     }));
@@ -433,6 +463,19 @@ mod tests {
         assert!(!ct_eq(b"abc", b"abd"));
         assert!(!ct_eq(b"abc", b"abcd"));
         assert!(!ct_eq(b"", b"x"));
+    }
+
+    #[test]
+    fn known_secrets_are_scrubbed_and_counted() {
+        let secrets = ["local-client-token-123", "fw_realproviderkey456"];
+        let mut v = json!("token local-client-token-123 and fw_realproviderkey456 twice fw_realproviderkey456");
+        let mut n = 0;
+        scrub_secrets(&secrets, &mut v, &mut n);
+        assert_eq!(n, 3);
+        assert_eq!(v, json!("token [SECRET_REDACTED] and [SECRET_REDACTED] twice [SECRET_REDACTED]"));
+        let mut clean = json!("nothing secret here");
+        scrub_secrets(&secrets, &mut clean, &mut n);
+        assert_eq!(n, 3);
     }
 
     #[test]
