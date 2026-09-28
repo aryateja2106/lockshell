@@ -10,6 +10,18 @@ pub fn run(args: RegisterArgs) -> Result<()> {
         ui::err(&format!("invalid env name '{}'. Must match [A-Z_][A-Z0-9_]*", args.env_name));
         std::process::exit(2);
     }
+    if registry::is_forbidden_env_name(&args.env_name) {
+        ui::err(&format!(
+            "'{}' controls how programs run (shell/loader/runtime variable); pick another name, e.g. MY_{}",
+            args.env_name, args.env_name
+        ));
+        std::process::exit(2);
+    }
+    if let Some(name) = args.vault_id.strip_prefix(crate::keychain::PREFIX) {
+        if !crate::keychain::exists(name) {
+            ui::warn(&format!("no Keychain item '{name}' yet; add it with: lockshell key add {name}"));
+        }
+    }
     registry::upsert(&args.env_name, &args.vault_id, &args.field)?;
     ui::ok(&format!(
         "registered: {} → {}.{}",

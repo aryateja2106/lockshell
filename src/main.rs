@@ -6,6 +6,9 @@
 mod audit_log;
 mod cli;
 mod commands;
+mod gateway;
+mod keychain;
+mod mask;
 mod redact;
 mod registry;
 mod ui;
@@ -29,6 +32,9 @@ fn main() -> Result<()> {
         cli::Command::Setup(c) => commands::setup::run(c),
         cli::Command::HelpMe => commands::help_me::run(),
         cli::Command::Dashboard(c) => commands::dashboard::run(c),
+        cli::Command::Key(c) => commands::key::run(c),
+        cli::Command::Mask(c) => commands::mask::run(c),
+        cli::Command::Gateway => gateway::serve(),
         cli::Command::Version => {
             println!("lockshell {} ({})", env!("CARGO_PKG_VERSION"), env!("CARGO_PKG_DESCRIPTION"));
             Ok(())
