@@ -168,39 +168,30 @@ Ask yourself:
 
 If all five are yes, you are using lockshell correctly.
 
+## Native Keychain secrets (no agent-password needed, macOS)
+
+Secrets can live in the macOS Keychain instead of agent-password:
+
+```bash
+lockshell key list                                   # what exists (names + fingerprints only)
+lockshell register FIREWORKS_API_KEY keychain:fireworks value
+lockshell run --reason "list fireworks models" -- \
+  'curl -s -H "Authorization: Bearer {{FIREWORKS_API_KEY}}" https://api.fireworks.ai/inference/v1/models'
+```
+
+Each read raises a macOS dialog for the user. You cannot approve it. Adding keys is the
+user's job (`lockshell key add <name>`, hidden prompt). Never ask for the value.
+
+## Calling models: use the gateway, not a key
+
+If the user runs `lockshell gateway`, call models through it:
+base URL `http://127.0.0.1:8787/v1`, model `<provider>/<model>` (see `GET /v1/models`).
+The gateway masks personal data before it leaves the machine and never gives you the key.
+See `docs/GATEWAY.md`.
+
 ## Where to read more
 
 - `README.md` for the human pitch
 - `docs/THREAT_MODEL.md` for what lockshell defends against
 - `docs/ARCHITECTURE.md` for the v0.1 → v0.3 plan
 - `examples/linear-graphql.md` for a worked example
-
-
-<claude-mem-context>
-# Memory Context
-
-# [lockshell] recent context, 2026-05-02 2:16pm PDT
-
-Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
-Format: ID TIME TYPE TITLE
-Fetch details: get_observations([IDs]) | Search: mem-search skill
-
-Stats: 13 obs (5,062t read) | 142,837t work | 96% savings
-
-### May 2, 2026
-3877 2:01p 🔵 Lockshell agent contract and workflow documented
-3878 " 🔵 Lockshell skill defines agent trigger patterns and hard rules
-3879 2:02p 🔵 Lockshell doctor diagnosed system state and missing session
-3880 " 🔵 Agent-password daemon fails to start with ready check timeout
-3881 " 🔵 Lockshell run fails with audit log permission error
-3883 " 🔵 lockshell agent-password session creation fails silently
-3882 2:03p 🔵 Audit log implementation traced to config_dir plus audit.log
-3884 " 🔵 lockshell run fails with permission error on audit.log despite correct Unix permissions
-3885 2:04p 🔵 LOCKSHELL_CONFIG_DIR workaround bypasses audit.log permission issue but exposes agent-password daemon failure
-3887 " 🔵 agent-password daemon startup timeout mechanism reveals 5-second connection window
-3888 2:05p 🔵 agent-password daemon fails to bind Unix socket due to macOS Operation not permitted error
-3890 2:06p 🔵 macOS blocks Unix socket bind operations across all directories for agent-password binary
-3894 " ✅ lockshell agent-readiness audit report completed documenting macOS security failures
-
-Access 143k tokens of past work via get_observations([IDs]) or mem-search skill.
-</claude-mem-context>

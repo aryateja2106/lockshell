@@ -67,6 +67,26 @@ pub enum Command {
     /// Render a local HTML dashboard of registry, session, and audit log
     Dashboard(DashboardArgs),
 
+    /// Store, list, or remove secrets in the native macOS Keychain
+    #[command(after_help = "EXAMPLES:\n  \
+        lockshell key add fireworks        # paste at a hidden prompt\n  \
+        lockshell key list                 # names + fingerprints, never values\n  \
+        lockshell register FIREWORKS_API_KEY keychain:fireworks value")]
+    Key(KeyArgs),
+
+    /// Mask sensitive text (emails, phones, IDs, API keys, your own terms) locally
+    #[command(after_help = "EXAMPLES:\n  \
+        lockshell mask check notes.md\n  \
+        lockshell mask apply notes.md --map notes.map.json > notes.masked.md\n  \
+        lockshell mask restore reply.md --map notes.map.json")]
+    Mask(MaskArgs),
+
+    /// Run the local OpenAI-compatible model gateway (keys stay in this process)
+    #[command(after_help = "Config: ~/.config/lockshell/gateway.json   Client token: ~/.config/lockshell/gateway-token\n\
+        Clients: base_url http://127.0.0.1:8787/v1, api_key = contents of the token file,\n\
+        model = \"<provider>/<model>\" (GET /v1/models lists them).")]
+    Gateway,
+
     /// Print version
     Version,
 }
@@ -165,6 +185,52 @@ pub struct DoctorArgs {
     /// Attempt to fix issues automatically where safe
     #[arg(long)]
     pub fix: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct KeyArgs {
+    #[command(subcommand)]
+    pub command: KeyCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum KeyCommand {
+    /// Add or replace a key. Prompts with hidden input (or reads stdin with --stdin)
+    Add {
+        /// Key name, e.g. fireworks
+        name: String,
+        /// Read the value from stdin (e.g. piped from a password manager)
+        #[arg(long)]
+        stdin: bool,
+    },
+    /// List stored keys: names, fingerprints, dates. Never values
+    List,
+    /// Remove a key from the Keychain
+    Rm { name: String },
+}
+
+#[derive(Parser, Debug)]
+pub struct MaskArgs {
+    #[command(subcommand)]
+    pub command: MaskCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum MaskCommand {
+    /// Count sensitive items by category (exit 1 if any). Never prints values
+    Check { file: Option<String> },
+    /// Print masked text; write the placeholder map (mode 600) to --map
+    Apply {
+        file: Option<String>,
+        #[arg(long)]
+        map: String,
+    },
+    /// Put original values back using a map from `apply`
+    Restore {
+        file: Option<String>,
+        #[arg(long)]
+        map: String,
+    },
 }
 
 #[derive(Parser, Debug)]

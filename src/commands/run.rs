@@ -50,7 +50,17 @@ pub fn run(args: RunArgs) -> Result<()> {
                 "{} is not registered. Run: lockshell register {} <vault-id> <field>",
                 ph, ph
             ))?;
-        match AgentPasswordVault::get_field(&mapping.vault_id, &mapping.field) {
+        // Defense in depth: a registry edited by hand (or by an agent) must not
+        // turn a secret into a variable that changes how the child runs.
+        if registry::is_forbidden_env_name(ph) {
+            ui::err(&format!("{ph} is a shell/loader/runtime variable name; refusing to inject a secret into it."));
+            std::process::exit(2);
+        }
+        let fetched = match mapping.vault_id.strip_prefix(crate::keychain::PREFIX) {
+            Some(name) => crate::keychain::get(name).map(|v| v.as_str().to_string()),
+            None => AgentPasswordVault::get_field(&mapping.vault_id, &mapping.field),
+        };
+        match fetched {
             Ok(val) => resolved.push((ph.clone(), Zeroizing::new(val))),
             Err(e) => {
                 if let Some(VaultError::NotApproved(_)) = e.downcast_ref::<VaultError>() {
@@ -120,10 +130,14 @@ pub fn run(args: RunArgs) -> Result<()> {
     if args.no_redact && !no_redact_allowed {
         ui::warn("--no-redact requires LOCKSHELL_ALLOW_NO_REDACT=1; ignoring flag and redacting normally.");
     }
+    // Exact resolved values first: the strongest net, and it catches formats no
+    // regex knows about. Then the built-in and user-configured patterns.
     let patterns = if no_redact_allowed {
         vec![]
     } else {
-        redact::load_patterns()?
+        let mut p = redact::exact_value_patterns(resolved.iter().map(|(_, v)| v.as_str()));
+        p.extend(redact::load_patterns()?);
+        p
     };
 
     let stdout_clean = if no_redact_allowed { stdout } else { redact::redact(&stdout, &patterns) };

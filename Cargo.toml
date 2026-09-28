@@ -30,6 +30,15 @@ nu-ansi-term = "0.50"
 # zero out secret values in process memory once they're no longer needed.
 # best-effort against forensic memory dumps; not a defense against active root.
 zeroize = { version = "1.8", features = ["derive"] }
+# gateway: tiny sync HTTP server + HTTPS client (rustls), no async runtime
+tiny_http = "0.12"
+ureq = { version = "2.10", features = ["json"] }
+sha2 = "0.10"
+rpassword = "7.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# native Keychain reads (the access dialog names lockshell, not /usr/bin/security)
+security-framework = "2.11"
 
 [dev-dependencies]
 assert_cmd = "2.0"

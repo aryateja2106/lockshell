@@ -25,7 +25,17 @@ xoxp-[A-Za-z0-9-]+
 AIza[A-Za-z0-9_-]{35}
 eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+
 AKIA[0-9A-Z]{16}
+fw_[A-Za-z0-9]{16,}
 "#;
+
+/// Exact-match patterns for the secret values resolved for this run. This
+/// catches any format, including ones no regex above knows about. Values
+/// shorter than 6 chars are skipped to avoid redacting common words.
+pub fn exact_value_patterns<'a>(values: impl Iterator<Item = &'a str>) -> Vec<Regex> {
+    let mut vals: Vec<&str> = values.filter(|v| v.len() >= 6).collect();
+    vals.sort_by_key(|v| std::cmp::Reverse(v.len())); // longest first
+    vals.iter().filter_map(|v| Regex::new(&regex::escape(v)).ok()).collect()
+}
 
 pub fn ensure_default() -> Result<()> {
     let path = redactor_path();
@@ -42,9 +52,15 @@ pub fn ensure_default() -> Result<()> {
 
 pub fn load_patterns() -> Result<Vec<Regex>> {
     ensure_default()?;
-    let raw = fs::read_to_string(redactor_path())?;
+    // Built-ins are always active, even if redactors.txt was written by an older
+    // version (it is only created when missing, so it would never gain new ones).
+    let raw = format!("{}\n{}", DEFAULT_PATTERNS, fs::read_to_string(redactor_path())?);
     let mut patterns = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for line in raw.lines() {
+        if !seen.insert(line.trim().to_string()) {
+            continue;
+        }
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with('#') {
             continue;
@@ -63,4 +79,30 @@ pub fn redact(input: &str, patterns: &[Regex]) -> String {
         out = r.replace_all(&out, "[REDACTED]").to_string();
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_values_are_redacted_whatever_their_format() {
+        let p = exact_value_patterns(["weird.format+Secret$(1)"].into_iter());
+        assert_eq!(redact("token=weird.format+Secret$(1) ok", &p), "token=[REDACTED] ok");
+    }
+
+    #[test]
+    fn short_values_are_not_turned_into_patterns() {
+        assert!(exact_value_patterns(["abc"].into_iter()).is_empty());
+    }
+
+    #[test]
+    fn builtin_patterns_include_fireworks() {
+        let p: Vec<Regex> = DEFAULT_PATTERNS
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+            .map(|l| Regex::new(l).unwrap())
+            .collect();
+        assert_eq!(redact("key fw_AbCdEf1234567890XYZ", &p), "key [REDACTED]");
+    }
 }

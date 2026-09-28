@@ -13,6 +13,24 @@ pub const MAX_ENV_NAME_LEN: usize = 256;
 pub const MAX_VAULT_ID_LEN: usize = 256;
 pub const MAX_FIELD_LEN: usize = 64;
 
+/// Placeholder names become environment variables of the child shell. Names
+/// that change how the shell, dynamic loader, or common runtimes behave are
+/// refused: a template (written by an LLM) must not be able to turn a secret
+/// into `BASH_ENV`, `PATH`, `DYLD_INSERT_LIBRARIES`, `NODE_OPTIONS`, ...
+pub fn is_forbidden_env_name(name: &str) -> bool {
+    const EXACT: &[&str] = &[
+        "PATH", "HOME", "USER", "LOGNAME", "SHELL", "IFS", "ENV", "CDPATH", "PS1", "PS2", "PS4",
+        "SHELLOPTS", "BASHOPTS", "GLOBIGNORE", "PROMPT_COMMAND", "TMPDIR", "TERM", "LANG",
+        "PWD", "OLDPWD", "EDITOR", "VISUAL", "PAGER", "HISTFILE", "ZDOTDIR", "SSL_CERT_FILE",
+        "SSL_CERT_DIR", "CURL_CA_BUNDLE", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+    ];
+    const PREFIXES: &[&str] = &[
+        "LD_", "DYLD_", "BASH_", "LC_", "GIT_", "NODE_", "NPM_CONFIG_", "PYTHON", "PERL", "RUBY",
+        "JAVA_", "LOCKSHELL_",
+    ];
+    EXACT.contains(&name) || PREFIXES.iter().any(|p| name.starts_with(p))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mapping {
     pub env_name: String,
